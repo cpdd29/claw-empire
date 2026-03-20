@@ -31,6 +31,7 @@ import {
 import { registerAgentRoutes } from "./core/agents/index.ts";
 import { registerDepartmentRoutes } from "./core/departments.ts";
 import { registerGitHubRoutes } from "./core/github-routes.ts";
+import { registerOrgNodeRoutes } from "./core/org-nodes.ts";
 import { registerProjectRoutes } from "./core/projects.ts";
 import { registerTaskCrudRoutes } from "./core/tasks/crud.ts";
 import { registerTaskExecutionRoutes } from "./core/tasks/execution.ts";
@@ -337,6 +338,11 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
     normalizeTextField,
     runInTransaction,
   });
+
+  // ---------------------------------------------------------------------------
+  // Org Nodes (Hierarchical CEO Structure)
+  // ---------------------------------------------------------------------------
+  registerOrgNodeRoutes(__ctx);
 
   // ---------------------------------------------------------------------------
   // Projects

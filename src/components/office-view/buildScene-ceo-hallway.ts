@@ -17,6 +17,7 @@ import {
 } from "./drawing-core";
 import { drawChair, drawPlant } from "./drawing-furniture-a";
 import { formatPeopleCount, formatTaskCount } from "./drawing-furniture-b";
+import type { OrgNode } from "../../types/org-nodes";
 
 interface BuildCeoAndHallwayParams {
   app: Application;

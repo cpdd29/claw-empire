@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useCallback } from "react";
 import type { DecisionInboxItem } from "./components/chat/decision-inbox";
+import OrgTreeManager from "./components/OrgTreeManager";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type {
   Department,
@@ -562,6 +563,7 @@ export default function App() {
           setActiveRoomThemeTargetId(null);
         }}
       />
+      {view === "orgtree" && <OrgTreeManager />}
     </AppMainLayout>
   );
 }

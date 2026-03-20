@@ -39,6 +39,7 @@ import { createSecurityAuditTools } from "./modules/bootstrap/security-audit.ts"
 import { applyBaseSchema } from "./modules/bootstrap/schema/base-schema.ts";
 import { initializeOAuthRuntime } from "./modules/bootstrap/schema/oauth-runtime.ts";
 import { applyTaskSchemaMigrations } from "./modules/bootstrap/schema/task-schema-migrations.ts";
+import { applyOrgSchemaMigrations } from "./modules/bootstrap/schema/org-schema-migrations.ts";
 import { applyDefaultSeeds } from "./modules/bootstrap/schema/seeds.ts";
 
 export type { TaskCreationAuditInput } from "./modules/bootstrap/security-audit.ts";
@@ -56,6 +57,7 @@ const readSettingString = createReadSettingString(db);
 applyBaseSchema(db);
 const oauthRuntime = initializeOAuthRuntime({ db, nowMs, runInTransaction });
 applyTaskSchemaMigrations(db);
+applyOrgSchemaMigrations(db);
 applyDefaultSeeds(db);
 
 const messageIdempotency = createMessageIdempotencyTools({
