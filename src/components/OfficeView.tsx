@@ -33,6 +33,8 @@ import {
 } from "./office-view/useOfficeDeliveryEffects";
 import { useOfficePixiRuntime } from "./office-view/useOfficePixiRuntime";
 import { buildOfficeScene } from "./office-view/buildScene";
+import { buildMultiFloorOffice } from "./office-view/buildScene-multi-floor";
+import type { OrgNode } from "../types/org-nodes";
 
 export default function OfficeView({
   departments,
@@ -129,6 +131,27 @@ export default function OfficeView({
   localeRef.current = language;
   const themeHighlightTargetIdRef = useRef<string | null>(themeHighlightTargetId ?? null);
   themeHighlightTargetIdRef.current = themeHighlightTargetId ?? null;
+
+  // Multi-floor org nodes state
+  const [orgNodes, setOrgNodes] = useState<OrgNode[]>([]);
+  const orgNodesRef = useRef<OrgNode[]>([]);
+  orgNodesRef.current = orgNodes;
+
+  // Fetch org nodes on mount
+  useEffect(() => {
+    async function fetchOrgNodes() {
+      try {
+        const res = await fetch("/api/org-nodes");
+        if (res.ok) {
+          const data = await res.json();
+          setOrgNodes(data);
+        }
+      } catch (e) {
+        // Silently fail - use original single-floor rendering
+      }
+    }
+    fetchOrgNodes();
+  }, []);
 
   // Latest data via refs (avoids stale closures)
   const dataRef = useRef({ departments, agents, tasks, subAgents, unreadAgentIds, meetingPresence, customDeptThemes });
@@ -255,43 +278,72 @@ export default function OfficeView({
   );
 
   /* ── BUILD SCENE (no app destroy, just stage clear + rebuild) ── */
+  // Multi-floor view state - default to false for stability
+  const [useMultiFloorView, setUseMultiFloorView] = useState(false);
+
   const buildScene = useCallback(() => {
-    buildOfficeScene({
-      appRef,
-      texturesRef,
-      dataRef,
-      cbRef,
-      activeMeetingTaskIdRef,
-      meetingMinutesOpenRef,
-      localeRef,
-      themeRef,
-      animItemsRef,
-      roomRectsRef,
-      deliveriesRef,
-      deliveryLayerRef,
-      prevAssignRef,
-      agentPosRef,
-      spriteMapRef,
-      ceoMeetingSeatsRef,
-      totalHRef,
-      officeWRef,
-      ceoPosRef,
-      ceoSpriteRef,
-      crownRef,
-      highlightRef,
-      ceoOfficeRectRef,
-      breakRoomRectRef,
-      breakAnimItemsRef,
-      subCloneAnimItemsRef,
-      subCloneBurstParticlesRef,
-      subCloneSnapshotRef,
-      breakSteamParticlesRef,
-      breakBubblesRef,
-      wallClocksRef,
-      wallClockSecondRef,
-      setSceneRevision,
-    });
-  }, []);
+    const app = appRef.current;
+    if (!app) return;
+
+    // Only use multi-floor view when explicitly enabled
+    if (useMultiFloorView) {
+      const nodes = orgNodesRef.current;
+      buildMultiFloorOffice({
+        app,
+        OFFICE_W: officeWRef.current,
+        orgNodes: nodes,
+        agents,
+        tasks,
+        activeLocale: localeRef.current,
+        isDark: themeRef.current === "dark",
+        onSelectAgent,
+        onSelectNode: (node) => {
+          const linkedAgent = agents.find(a => (a as any).org_node_id === node.id);
+          if (linkedAgent) onSelectAgent(linkedAgent);
+        },
+        deliveriesRef,
+        wallClocksRef,
+        totalHRef,
+      });
+    } else {
+      // Always use original single-floor rendering by default
+      buildOfficeScene({
+        appRef,
+        texturesRef,
+        dataRef,
+        cbRef,
+        activeMeetingTaskIdRef,
+        meetingMinutesOpenRef,
+        localeRef,
+        themeRef,
+        animItemsRef,
+        roomRectsRef,
+        deliveriesRef,
+        deliveryLayerRef,
+        prevAssignRef,
+        agentPosRef,
+        spriteMapRef,
+        ceoMeetingSeatsRef,
+        totalHRef,
+        officeWRef,
+        ceoPosRef,
+        ceoSpriteRef,
+        crownRef,
+        highlightRef,
+        ceoOfficeRectRef,
+        breakRoomRectRef,
+        breakAnimItemsRef,
+        subCloneAnimItemsRef,
+        subCloneBurstParticlesRef,
+        subCloneSnapshotRef,
+        breakSteamParticlesRef,
+        breakBubblesRef,
+        wallClocksRef,
+        wallClockSecondRef,
+        setSceneRevision,
+      });
+    }
+  }, [agents, onSelectAgent, useMultiFloorView]);
 
   const { cliStatus, cliUsage, cliUsageRef, refreshing, handleRefreshUsage } = useCliUsage(tasks);
 
@@ -392,6 +444,27 @@ export default function OfficeView({
 
   return (
     <div className="w-full overflow-auto" style={{ minHeight: "100%" }}>
+      {/* Multi-floor view toggle - hidden by default */}
+      {orgNodes.length > 1 && (
+        <button
+          onClick={() => setUseMultiFloorView(!useMultiFloorView)}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            zIndex: 100,
+            padding: "4px 8px",
+            fontSize: 11,
+            background: useMultiFloorView ? "#4CAF50" : "#666",
+            color: "white",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          {useMultiFloorView ? "🗂️ 多楼层视图" : "📋 单层视图"}
+        </button>
+      )}
       <div className="relative mx-auto w-full">
         <div
           ref={containerRef}

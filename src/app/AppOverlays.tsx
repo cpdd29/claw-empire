@@ -11,8 +11,10 @@ import type { DecisionInboxItem } from "../components/chat/decision-inbox";
 import type { Agent, Department, Message, RoomTheme, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
 import type { UiLanguage } from "../i18n";
 import type { ProjectMetaPayload, RoomThemeMap, TaskPanelTab } from "./types";
+import type { ReactNode } from "react";
 
 interface AppOverlaysProps {
+  children?: ReactNode;
   showChat: boolean;
   chatAgent: Agent | null;
   messages: Message[];
@@ -76,6 +78,7 @@ interface AppOverlaysProps {
 }
 
 export default function AppOverlays({
+  children,
   showChat,
   chatAgent,
   messages,
@@ -123,6 +126,7 @@ export default function AppOverlays({
 }: AppOverlaysProps) {
   return (
     <>
+      {children}
       {showChat && (
         <ChatPanel
           selectedAgent={chatAgent}

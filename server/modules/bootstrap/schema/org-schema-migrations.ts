@@ -30,7 +30,63 @@ export function applyOrgSchemaMigrations(db: DbLike): void {
   ensureOrgNodesTable(db);
   ensureAgentsOrgNodeLink(db);
   ensureMessagesCrossNodeFields(db);
+  ensureTasksOrgNodeFields(db);
+  ensureTaskFlowLogsTable(db);
+  ensureMemoryLogsTable(db);
+  ensureWorkflowsTable(db);
+  ensureStudiosTable(db);
+  ensureDepartmentsStudioLink(db);
   seedDefaultOrgNodes(db);
+}
+
+function ensureWorkflowsTable(db: DbLike): void {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS workflows (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        nodes_json TEXT,
+        edges_json TEXT,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','active','archived')),
+        assigned_agent_id TEXT,
+        created_at INTEGER DEFAULT (unixepoch()*1000),
+        updated_at INTEGER DEFAULT (unixepoch()*1000)
+      )
+    `);
+  } catch {
+    /* already exists */
+  }
+  // Migration: add assigned_agent_id if not exists
+  try {
+    db.exec("ALTER TABLE workflows ADD COLUMN assigned_agent_id TEXT");
+  } catch {
+    /* already exists */
+  }
+  // Migration: add run_count if not exists
+  try {
+    db.exec("ALTER TABLE workflows ADD COLUMN run_count INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+}
+
+function ensureMemoryLogsTable(db: DbLike): void {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS memory_logs (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        user_id TEXT,
+        content TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'add' CHECK(type IN ('add','purge')),
+        created_at INTEGER DEFAULT (unixepoch()*1000)
+      )
+    `);
+    db.exec("CREATE INDEX IF NOT EXISTS idx_memory_logs_agent ON memory_logs(agent_id)");
+  } catch {
+    /* already exists */
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +249,92 @@ function ensureMessagesCrossNodeFields(db: DbLike): void {
     db.exec("CREATE INDEX IF NOT EXISTS idx_messages_org_receiver ON messages(org_receiver_node_id)");
   } catch {
     /* best effort */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add org node tracking to tasks table
+// ---------------------------------------------------------------------------
+
+function ensureTasksOrgNodeFields(db: DbLike): void {
+  try {
+    db.exec("ALTER TABLE tasks ADD COLUMN initiator_org_node_id TEXT REFERENCES org_nodes(id) ON DELETE SET NULL");
+  } catch {
+    /* already exists or column already present */
+  }
+  try {
+    db.exec("ALTER TABLE tasks ADD COLUMN current_org_node_id TEXT REFERENCES org_nodes(id) ON DELETE SET NULL");
+  } catch {
+    /* already exists or column already present */
+  }
+  try {
+    db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_initiator_node ON tasks(initiator_org_node_id)");
+  } catch {
+    /* best effort */
+  }
+  try {
+    db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_current_node ON tasks(current_org_node_id)");
+  } catch {
+    /* best effort */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// task_flow_logs table for delegation tracking
+// ---------------------------------------------------------------------------
+
+function ensureTaskFlowLogsTable(db: DbLike): void {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS task_flow_logs (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        from_node_id TEXT REFERENCES org_nodes(id) ON DELETE SET NULL,
+        to_node_id TEXT REFERENCES org_nodes(id) ON DELETE SET NULL,
+        instructions TEXT,
+        status TEXT DEFAULT 'pending',
+        summary TEXT,
+        created_at INTEGER DEFAULT (unixepoch()*1000)
+      )
+    `);
+    db.exec("CREATE INDEX IF NOT EXISTS idx_task_flow_logs_task ON task_flow_logs(task_id)");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_task_flow_logs_from ON task_flow_logs(from_node_id)");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_task_flow_logs_to ON task_flow_logs(to_node_id)");
+  } catch {
+    /* already exists */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// studios table
+// ---------------------------------------------------------------------------
+
+function ensureStudiosTable(db: DbLike): void {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS studios (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        name_ko TEXT NOT NULL DEFAULT '',
+        name_ja TEXT NOT NULL DEFAULT '',
+        name_zh TEXT NOT NULL DEFAULT '',
+        icon TEXT NOT NULL DEFAULT '🏢',
+        description TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 99,
+        created_at INTEGER DEFAULT (unixepoch()*1000),
+        updated_at INTEGER DEFAULT (unixepoch()*1000)
+      )
+    `);
+  } catch {
+    /* already exists */
+  }
+}
+
+function ensureDepartmentsStudioLink(db: DbLike): void {
+  try {
+    db.exec("ALTER TABLE departments ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL");
+  } catch {
+    /* already exists */
   }
 }
 

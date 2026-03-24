@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import type { DecisionInboxItem } from "./components/chat/decision-inbox";
 import OrgTreeManager from "./components/OrgTreeManager";
 import { useWebSocket } from "./hooks/useWebSocket";
@@ -21,6 +21,7 @@ import type {
 } from "./types";
 import type { TaskReportDetail } from "./api";
 import * as api from "./api";
+import { getMessages } from "./api/messaging-runtime-oauth";
 import { detectBrowserLanguage, normalizeLanguage } from "./i18n";
 import { useTheme } from "./ThemeContext";
 import { ROOM_THEMES_STORAGE_KEY, UPDATE_BANNER_DISMISS_STORAGE_KEY } from "./app/constants";
@@ -49,6 +50,7 @@ import {
   getOfficePackMeta,
   normalizeOfficeWorkflowPack,
   resolveOfficePackSeedProvider,
+  listOfficePackOptions,
 } from "./app/office-workflow-pack";
 
 export type { OAuthCallbackResult } from "./app/types";
@@ -63,6 +65,12 @@ export default function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+
+  useEffect(() => {
+    if (view === "announcement") {
+      void getMessages({}).then(setMessages);
+    }
+  }, [view]);
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [settings, setSettings] = useState<CompanySettings>(() =>
     mergeSettingsWithDefaults({ language: detectBrowserLanguage() }),
@@ -391,7 +399,8 @@ export default function App() {
   }
 
   return (
-    <AppMainLayout
+    <>
+      <AppMainLayout
       connected={connected}
       view={view}
       setView={setView}
@@ -464,106 +473,124 @@ export default function App() {
           window.localStorage.setItem(UPDATE_BANNER_DISMISS_STORAGE_KEY, latest);
         }
       }}
+      messages={messages}
+      streamingMessage={streamingMessage}
+      onSendMessage={actions.handleSendMessage}
+      onSendAnnouncement={actions.handleSendAnnouncement}
+      onSendDirective={actions.handleSendDirective}
+      onClearMessages={actions.handleClearMessages}
+      onCloseAnnouncement={() => setView("office")}
       officePackBootstrappingLabel={officePackBootstrappingLabel}
     >
-      <AppOverlays
-        showChat={showChat}
-        chatAgent={chatAgent}
-        messages={messages}
-        agents={overlayAgents}
-        streamingMessage={streamingMessage}
-        onSendMessage={actions.handleSendMessage}
-        onSendAnnouncement={actions.handleSendAnnouncement}
-        onSendDirective={actions.handleSendDirective}
-        onClearMessages={actions.handleClearMessages}
-        onCloseChat={() => setShowChat(false)}
-        showDecisionInbox={showDecisionInbox}
-        decisionInboxLoading={decisionInboxLoading}
-        decisionInboxItems={decisionInboxItems}
-        decisionReplyBusyKey={decisionReplyBusyKey}
-        uiLanguage={labels.uiLanguage}
-        onCloseDecisionInbox={() => setShowDecisionInbox(false)}
-        onRefreshDecisionInbox={() => {
-          void actions.loadDecisionInbox();
-        }}
-        onReplyDecisionOption={actions.handleReplyDecisionOption}
-        onOpenDecisionChat={actions.handleOpenDecisionChat}
-        selectedAgent={selectedAgent}
-        activeOfficeWorkflowPack={settings.officeWorkflowPack ?? "development"}
-        departments={overlayDepartments}
-        tasks={tasks}
-        subAgents={subAgents}
-        subtasks={subtasks}
-        onCloseSelectedAgent={() => setSelectedAgent(null)}
-        onChatFromAgentDetail={(agent) => {
-          setSelectedAgent(null);
-          actions.handleOpenChat(agent);
-        }}
-        onAssignTaskFromAgentDetail={() => {
-          setSelectedAgent(null);
-          setView("tasks");
-        }}
-        onOpenTerminalFromAgentDetail={(taskId) => {
-          setSelectedAgent(null);
-          setTaskPanel({ taskId, tab: "terminal" });
-        }}
-        onAgentUpdated={() => {
-          api
-            .getSettings()
-            .then(async (nextSettingsRaw) => {
-              const nextSettings = mergeSettingsWithDefaults(nextSettingsRaw);
-              const activePack = nextSettings.officeWorkflowPack ?? "development";
-              const nextAgents = await api.getAgents({ includeSeed: activePack !== "development" });
-              setAgents(nextAgents);
-              setSettings(nextSettings);
-
-              if (!selectedAgent) return;
-              const fromAgents = nextAgents.find((agent) => agent.id === selectedAgent.id);
-              if (fromAgents) {
-                setSelectedAgent(fromAgents);
-                return;
-              }
-
-              const profilePackKey = nextSettings.officeWorkflowPack ?? "development";
-              const fromPackProfile = nextSettings.officePackProfiles?.[profilePackKey]?.agents?.find(
-                (agent) => agent.id === selectedAgent.id,
-              );
-              if (fromPackProfile) {
-                setSelectedAgent(fromPackProfile);
-              }
-            })
-            .catch(console.error);
-        }}
-        taskPanel={taskPanel}
-        onCloseTaskPanel={() => setTaskPanel(null)}
-        taskReport={taskReport}
-        onCloseTaskReport={() => setTaskReport(null)}
-        showReportHistory={showReportHistory}
-        onCloseReportHistory={() => setShowReportHistory(false)}
-        showAgentStatus={showAgentStatus}
-        onCloseAgentStatus={() => setShowAgentStatus(false)}
-        showRoomManager={showRoomManager}
-        roomManagerDepartments={labels.roomManagerDepartments}
-        customRoomThemes={customRoomThemes}
-        onActiveRoomThemeTargetIdChange={setActiveRoomThemeTargetId}
-        onRoomThemeChange={(themes) => {
-          setCustomRoomThemes(themes as RoomThemeMap);
-          hasLocalRoomThemesRef.current = true;
-          try {
-            window.localStorage.setItem(ROOM_THEMES_STORAGE_KEY, JSON.stringify(themes));
-          } catch {
-            // ignore quota errors
-          }
-          api.saveRoomThemes(themes as Record<string, RoomTheme>).catch((error) => {
-            console.error("Save room themes failed:", error);
-          });
-        }}
-        onCloseRoomManager={() => {
-          setShowRoomManager(false);
-          setActiveRoomThemeTargetId(null);
-        }}
-      />
-      {view === "orgtree" && <OrgTreeManager />}
+      {view === "orgtree" && (
+        <div style={{width:"100%", height:"100%", padding:"24px", overflowY:"auto"}}>
+          <OrgTreeManager
+            onBack={() => setView("dashboard")}
+            departments={departments}
+            officePackOptions={listOfficePackOptions("zh")}
+            officePackKey={activePackKey}
+            onChangeOfficeWorkflowPack={handleOfficeWorkflowPackChange}
+          />
+        </div>
+      )}
     </AppMainLayout>
+    <AppOverlays
+      showChat={showChat}
+      chatAgent={chatAgent}
+      messages={messages}
+      agents={overlayAgents}
+      streamingMessage={streamingMessage}
+      onSendMessage={actions.handleSendMessage}
+      onSendAnnouncement={actions.handleSendAnnouncement}
+      onSendDirective={actions.handleSendDirective}
+      onClearMessages={actions.handleClearMessages}
+      onCloseChat={() => setShowChat(false)}
+      showDecisionInbox={showDecisionInbox}
+      decisionInboxLoading={decisionInboxLoading}
+      decisionInboxItems={decisionInboxItems}
+      decisionReplyBusyKey={decisionReplyBusyKey}
+      uiLanguage={labels.uiLanguage}
+      onCloseDecisionInbox={() => setShowDecisionInbox(false)}
+      onRefreshDecisionInbox={() => {
+        void actions.loadDecisionInbox();
+      }}
+      onReplyDecisionOption={actions.handleReplyDecisionOption}
+      onOpenDecisionChat={actions.handleOpenDecisionChat}
+      selectedAgent={selectedAgent}
+      activeOfficeWorkflowPack={settings.officeWorkflowPack ?? "development"}
+      departments={overlayDepartments}
+      tasks={tasks}
+      subAgents={subAgents}
+      subtasks={subtasks}
+      onCloseSelectedAgent={() => setSelectedAgent(null)}
+      onChatFromAgentDetail={(agent) => {
+        setSelectedAgent(null);
+        actions.handleOpenChat(agent);
+      }}
+      onAssignTaskFromAgentDetail={() => {
+        setSelectedAgent(null);
+        setView("tasks");
+      }}
+      onOpenTerminalFromAgentDetail={(taskId) => {
+        setSelectedAgent(null);
+        setTaskPanel({ taskId, tab: "terminal" });
+      }}
+      onAgentUpdated={() => {
+        api
+          .getSettings()
+          .then(async (nextSettingsRaw) => {
+            const nextSettings = mergeSettingsWithDefaults(nextSettingsRaw);
+            const activePack = nextSettings.officeWorkflowPack ?? "development";
+            const nextAgents = await api.getAgents({ includeSeed: activePack !== "development" });
+            setAgents(nextAgents);
+            setSettings(nextSettings);
+
+            if (!selectedAgent) return;
+            const fromAgents = nextAgents.find((agent) => agent.id === selectedAgent.id);
+            if (fromAgents) {
+              setSelectedAgent(fromAgents);
+              return;
+            }
+
+            const profilePackKey = nextSettings.officeWorkflowPack ?? "development";
+            const fromPackProfile = nextSettings.officePackProfiles?.[profilePackKey]?.agents?.find(
+              (agent) => agent.id === selectedAgent.id,
+            );
+            if (fromPackProfile) {
+              setSelectedAgent(fromPackProfile);
+            }
+          })
+          .catch(console.error);
+      }}
+      taskPanel={taskPanel}
+      onCloseTaskPanel={() => setTaskPanel(null)}
+      taskReport={taskReport}
+      onCloseTaskReport={() => setTaskReport(null)}
+      showReportHistory={showReportHistory}
+      onCloseReportHistory={() => setShowReportHistory(false)}
+      showAgentStatus={showAgentStatus}
+      onCloseAgentStatus={() => setShowAgentStatus(false)}
+      showRoomManager={showRoomManager}
+      roomManagerDepartments={labels.roomManagerDepartments}
+      customRoomThemes={customRoomThemes}
+      onActiveRoomThemeTargetIdChange={setActiveRoomThemeTargetId}
+      onRoomThemeChange={(themes) => {
+        setCustomRoomThemes(themes as RoomThemeMap);
+        hasLocalRoomThemesRef.current = true;
+        try {
+          window.localStorage.setItem(ROOM_THEMES_STORAGE_KEY, JSON.stringify(themes));
+        } catch {
+          // ignore quota errors
+        }
+        api.saveRoomThemes(themes as Record<string, RoomTheme>).catch((error) => {
+          console.error("Save room themes failed:", error);
+        });
+      }}
+      onCloseRoomManager={() => {
+        setShowRoomManager(false);
+        setActiveRoomThemeTargetId(null);
+      }}
+    />
+    </>
   );
 }

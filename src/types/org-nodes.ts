@@ -21,6 +21,7 @@ export interface OrgNode {
   tier: OrgNodeTier;
   parent_id: string | null;
   department_id: string | null;
+  agent_id: string | null;  // Direct agent assignment
   metadata_json: string | null;
   sort_order: number;
   created_at: number;

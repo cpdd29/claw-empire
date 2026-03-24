@@ -1,5 +1,6 @@
 import type { ComponentProps, FormEventHandler } from "react";
 import type { Agent, Department, TaskType } from "../../../types";
+import type { Workflow } from "../../../api/workflows";
 import { TASK_TYPE_OPTIONS, taskTypeLabel, type FormFeedback, type TFunction } from "../constants";
 import CreateTaskModalOverlays from "./Overlays";
 import type { CreateTaskModalOverlaysProps } from "./overlay-types";
@@ -31,6 +32,9 @@ interface CreateTaskModalViewProps {
   onTaskTypeChange: (value: TaskType) => void;
   onPriorityChange: (value: number) => void;
   onAssignAgentChange: (value: string) => void;
+  workflows: Workflow[];
+  selectedWorkflowId: string;
+  onWorkflowChange: (value: string) => void;
 }
 
 export default function CreateTaskModalView({
@@ -59,6 +63,9 @@ export default function CreateTaskModalView({
   onTaskTypeChange,
   onPriorityChange,
   onAssignAgentChange,
+  workflows,
+  selectedWorkflowId,
+  onWorkflowChange,
 }: CreateTaskModalViewProps) {
   return (
     <div
@@ -128,7 +135,7 @@ export default function CreateTaskModalView({
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-300">
-                  {t({ ko: "설명", en: "Description", ja: "説明", zh: "说明" })}
+                  {t({ ko: "설명", en: "Description", ja: "説明", zh: "说明" })} <span className="text-red-400">*</span>
                 </label>
                 <textarea
                   value={description}
@@ -147,7 +154,32 @@ export default function CreateTaskModalView({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-300">
-                    {t({ ko: "부서", en: "Department", ja: "部署", zh: "部门" })}
+                    {t({ ko: "워크플로우", en: "Workflow", ja: "ワークフロー", zh: "工作流" })}
+                  </label>
+                  <select
+                    value={selectedWorkflowId}
+                    onChange={(event) => onWorkflowChange(event.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">{t({ ko: "-- 선택 안 함 --", en: "-- None --", ja: "-- なし --", zh: "-- 不使用 --" })}</option>
+                    {workflows.map((wf) => (
+                      <option key={wf.id} value={wf.id}>{wf.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  {selectedWorkflowId && (
+                    <p className="text-xs text-amber-400 pb-2">
+                      {t({ ko: "담당자가 워크플로우 설정으로 고정됩니다", en: "Assignee locked by workflow", ja: "担当者はワークフローで固定", zh: "负责人由工作流固定" })}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-300">
+                    {t({ ko: "부서", en: "Department", ja: "部署", zh: "部门" })} <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={departmentId}
@@ -195,6 +227,7 @@ export default function CreateTaskModalView({
                   departmentId={departmentId}
                   assignAgentId={assignAgentId}
                   t={t}
+                  disabled={!!selectedWorkflowId}
                   onAssignAgentChange={onAssignAgentChange}
                 />
               </div>
@@ -210,6 +243,7 @@ export default function CreateTaskModalView({
                     departmentId={departmentId}
                     assignAgentId={assignAgentId}
                     t={t}
+                    disabled={!!selectedWorkflowId}
                     onAssignAgentChange={onAssignAgentChange}
                   />
                 </div>

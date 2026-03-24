@@ -289,7 +289,7 @@ export function registerOrgNodeRoutes(ctx: RuntimeContext): void {
           INNER JOIN node_tree nt ON n.parent_id = nt.id
         )
         SELECT * FROM node_tree ORDER BY tier ASC, sort_order ASC
-      `).all(id));
+      `).all(id as string));
 
       res.json({ ok: true, subtree });
     } catch (err: any) {
@@ -399,6 +399,92 @@ export function registerOrgNodeRoutes(ctx: RuntimeContext): void {
       `).all(node.tier, id));
 
       res.json({ ok: true, peers });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || String(err) });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Get task flow chain for a task (org node delegation path)
+  // ---------------------------------------------------------------------------
+  app.get("/api/task-flow/:taskId/chain", (req, res) => {
+    try {
+      const { taskId } = req.params;
+
+      // Get flow logs for this task
+      interface FlowLogRow {
+        id: string;
+        task_id: string;
+        from_node_id: string | null;
+        to_node_id: string;
+        instructions: string | null;
+        status: string;
+        created_at: number;
+      }
+
+      const flowLogs = (db.prepare(`
+        SELECT tfl.* FROM task_flow_logs tfl
+        WHERE tfl.task_id = ?
+        ORDER BY tfl.created_at ASC
+      `).all(taskId) as unknown) as FlowLogRow[];
+
+      // Build chain with node names
+      interface ChainNode {
+        node_id: string;
+        node_name: string;
+        node_tier: number;
+        from_node_id: string | null;
+        to_node_id: string;
+        instructions: string | null;
+        status: string;
+        created_at: number;
+      }
+
+      const chain: ChainNode[] = [];
+
+      for (const log of flowLogs) {
+        const toNode = asOrgNodeRow(db.prepare("SELECT * FROM org_nodes WHERE id = ?").get(log.to_node_id));
+        if (toNode) {
+          chain.push({
+            node_id: toNode.id,
+            node_name: toNode.name,
+            node_tier: toNode.tier,
+            from_node_id: log.from_node_id,
+            to_node_id: log.to_node_id,
+            instructions: log.instructions,
+            status: log.status,
+            created_at: log.created_at,
+          });
+        }
+      }
+
+      res.json({ ok: true, chain });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || String(err) });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Get active task count for an org node
+  // ---------------------------------------------------------------------------
+  app.get("/api/org-nodes/:id/active-tasks", (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Count tasks where this node is the current handler and status is active
+      const activeStatuses = ["planned", "in_progress", "collaborating", "pending"];
+
+      const result = db.prepare(`
+        SELECT COUNT(*) as cnt FROM tasks
+        WHERE current_org_node_id = ?
+          AND status IN (${activeStatuses.map(() => "?").join(",")})
+      `).get(id, ...activeStatuses) as { cnt: number };
+
+      res.json({
+        ok: true,
+        node_id: id,
+        active_task_count: result.cnt,
+      });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: err?.message || String(err) });
     }

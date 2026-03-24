@@ -3,7 +3,7 @@ import type { Department, Agent, CompanySettings } from "../types";
 import { useI18n, localeName } from "../i18n";
 import OrgTreeManager from "./OrgTreeManager";
 
-type View = "office" | "agents" | "dashboard" | "tasks" | "skills" | "settings" | "orgtree";
+type View = "office" | "agents" | "dashboard" | "tasks" | "skills" | "settings" | "orgtree" | "announcement" | "memory" | "workflow";
 
 interface SidebarProps {
   currentView: View;
@@ -20,7 +20,10 @@ const NAV_ITEMS: { view: View; icon: string; sprite?: string }[] = [
   { view: "skills", icon: "📚" },
   { view: "dashboard", icon: "📊" },
   { view: "tasks", icon: "📋" },
+  { view: "announcement", icon: "📢" },
   { view: "orgtree", icon: "🗂️" },
+  { view: "memory", icon: "🧠" },
+  { view: "workflow", icon: "⚡" },
   { view: "settings", icon: "⚙️" },
 ];
 
@@ -38,7 +41,10 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
     skills: tr("문서고", "Library", "ライブラリ", "文档库"),
     dashboard: tr("대시보드", "Dashboard", "ダッシュボード", "仪表盘"),
     tasks: tr("업무 관리", "Tasks", "タスク管理", "任务管理"),
+    announcement: tr("전원고지", "Announcement", "全員告知", "全员公告"),
     orgtree: tr("조직架构", "Org Tree", "組織構成", "组织架构"),
+    memory: tr("기억관리", "Memory", "記憶管理", "记忆管理"),
+    workflow: tr("워크플로우", "Workflow", "ワークフロー", "工作流"),
     settings: tr("설정", "Settings", "設定", "设置"),
   };
 

@@ -186,12 +186,15 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         a.*,
         COALESCE(opd.name, d.name) AS department_name,
         COALESCE(opd.name_ko, d.name_ko) AS department_name_ko,
-        COALESCE(opd.color, d.color) AS department_color
+        COALESCE(opd.color, d.color) AS department_color,
+        n.tier,
+        n.id AS org_node_id
       FROM agents a
       LEFT JOIN office_pack_departments opd
         ON opd.workflow_pack_key = ${agentPackExpr}
        AND opd.department_id = a.department_id
       LEFT JOIN departments d ON a.department_id = d.id
+      LEFT JOIN org_nodes n ON a.id = n.agent_id
       ${seedFilterClause}
       ORDER BY a.department_id, a.role, a.name
     `,
@@ -201,9 +204,11 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       agents = db
         .prepare(
           `
-      SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color
+      SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color,
+        n.tier, n.id AS org_node_id
       FROM agents a
       LEFT JOIN departments d ON a.department_id = d.id
+      LEFT JOIN org_nodes n ON a.id = n.agent_id
       ${seedFilterClause}
       ORDER BY a.department_id, a.role, a.name
     `,
@@ -405,6 +410,23 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
           )
           .get(id);
       }
+      // 自动创建 org_node
+      const tierRaw = body.tier;
+      const tier = typeof tierRaw === "number" && [0, 1, 2, 3].includes(tierRaw) ? tierRaw : 3;
+      const orgNodeId = `org-${Date.now()}-${randomUUID().slice(0, 8)}`;
+      const parentNode = department_id
+        ? (db.prepare("SELECT id FROM org_nodes WHERE tier=1 AND department_id=? LIMIT 1").get(department_id) as { id?: string } | undefined)
+        : undefined;
+      const parentId = parentNode?.id ?? null;
+      try {
+        db.prepare(
+          `INSERT INTO org_nodes (id, name, tier, department_id, parent_id, agent_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).run(orgNodeId, name, tier, department_id, parentId, id, Date.now());
+      } catch {
+        // org_nodes 创建失败不阻断 agent 创建
+      }
+
       broadcast("agent_created", created);
       res.status(201).json({ ok: true, agent: created });
     } catch (err) {
@@ -717,6 +739,43 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
 
     const updated = db.prepare("SELECT * FROM agents WHERE id = ?").get(id);
     broadcast("agent_status", updated);
+
+    // 同步更新 org_node
+    if ("tier" in body || "name" in body || "department_id" in body) {
+      const existingNode = db.prepare("SELECT id FROM org_nodes WHERE agent_id=? LIMIT 1").get(id) as { id?: string } | undefined;
+      if (existingNode?.id) {
+        const nodeUpdates: string[] = [];
+        const nodeParams: unknown[] = [];
+        if ("name" in body && typeof body.name === "string") {
+          nodeUpdates.push("name = ?");
+          nodeParams.push(body.name.trim());
+        }
+        if ("tier" in body && typeof body.tier === "number" && [0, 1, 2, 3].includes(body.tier)) {
+          nodeUpdates.push("tier = ?");
+          nodeParams.push(body.tier);
+        }
+        if ("department_id" in body) {
+          const newDeptId = typeof body.department_id === "string" ? body.department_id.trim() || null : null;
+          nodeUpdates.push("department_id = ?");
+          nodeParams.push(newDeptId);
+          // 重新找秘书节点作为 parent
+          const parentNode = newDeptId
+            ? (db.prepare("SELECT id FROM org_nodes WHERE tier=1 AND department_id=? LIMIT 1").get(newDeptId) as { id?: string } | undefined)
+            : undefined;
+          nodeUpdates.push("parent_id = ?");
+          nodeParams.push(parentNode?.id ?? null);
+        }
+        if (nodeUpdates.length > 0) {
+          nodeParams.push(existingNode.id);
+          try {
+            db.prepare(`UPDATE org_nodes SET ${nodeUpdates.join(", ")} WHERE id = ?`).run(...(nodeParams as any[]));
+          } catch {
+            // 同步失败不阻断响应
+          }
+        }
+      }
+    }
+
     res.json({ ok: true, agent: updated });
   });
 }

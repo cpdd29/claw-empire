@@ -412,7 +412,7 @@ export function ChatPanel({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex h-full w-full flex-col bg-gray-900 shadow-2xl lg:relative lg:inset-auto lg:z-auto lg:w-96 lg:border-l lg:border-gray-700">
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", overflow: "hidden" }}>
       <ChatPanelHeader
         selectedAgent={selectedAgent}
         selectedDeptName={selectedDeptName}
@@ -428,21 +428,23 @@ export function ChatPanel({
         onClose={onClose}
       />
 
-      <ChatMessageList
-        selectedAgent={selectedAgent}
-        visibleMessages={visibleMessages}
-        agents={agents}
-        spriteMap={spriteMap}
-        locale={locale}
-        tr={tr}
-        getAgentName={getAgentName}
-        decisionRequestByMessage={decisionRequestByMessage}
-        decisionReplyKey={decisionReplyKey}
-        onDecisionOptionReply={handleDecisionOptionReply}
-        onDecisionManualDraft={handleDecisionManualDraft}
-        streamingMessage={streamingMessage}
-        messagesEndRef={messagesEndRef}
-      />
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+        <ChatMessageList
+          selectedAgent={selectedAgent}
+          visibleMessages={visibleMessages}
+          agents={agents}
+          spriteMap={spriteMap}
+          locale={locale}
+          tr={tr}
+          getAgentName={getAgentName}
+          decisionRequestByMessage={decisionRequestByMessage}
+          decisionReplyKey={decisionReplyKey}
+          onDecisionOptionReply={handleDecisionOptionReply}
+          onDecisionManualDraft={handleDecisionManualDraft}
+          streamingMessage={streamingMessage}
+          messagesEndRef={messagesEndRef}
+        />
+      </div>
 
       <ProjectFlowDialog
         open={projectFlowOpen}

@@ -47,6 +47,7 @@ interface AssigneeSectionProps {
   departmentId: string;
   assignAgentId: string;
   t: TFunction;
+  disabled?: boolean;
   onAssignAgentChange: (agentId: string) => void;
 }
 
@@ -56,10 +57,11 @@ export function AssigneeSection({
   departmentId,
   assignAgentId,
   t,
+  disabled,
   onAssignAgentChange,
 }: AssigneeSectionProps) {
   return (
-    <div>
+    <div className={disabled ? "pointer-events-none opacity-50" : ""}>
       <label className="mb-1 block text-sm font-medium text-slate-300">
         {t({ ko: "담당 에이전트", en: "Assignee", ja: "担当エージェント", zh: "负责人" })}
       </label>
@@ -158,7 +160,7 @@ export function ProjectSection({
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-slate-300">
-        {t({ ko: "프로젝트명", en: "Project Name", ja: "プロジェクト名", zh: "项目名" })}
+        {t({ ko: "프로젝트 경로", en: "Project Path", ja: "プロジェクトパス", zh: "项目路径" })} <span className="text-red-400">*</span>
       </label>
       <div className="relative" ref={projectPickerRef}>
         <div className="flex items-center gap-2">

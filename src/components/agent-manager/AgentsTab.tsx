@@ -3,6 +3,7 @@ import { localeName } from "../../i18n";
 import AgentCard from "./AgentCard";
 import { StackedSpriteIcon } from "./EmojiPicker";
 import type { Translator } from "./types";
+import type { OrgNode } from "../../types/org-nodes";
 
 interface AgentsTabProps {
   tr: Translator;
@@ -10,6 +11,7 @@ interface AgentsTabProps {
   isKo: boolean;
   agents: Agent[];
   departments: Department[];
+  orgNodes: OrgNode[];
   deptTab: string;
   setDeptTab: (deptId: string) => void;
   search: string;
@@ -21,6 +23,8 @@ interface AgentsTabProps {
   onEditAgent: (agent: Agent) => void;
   onEditDepartment: (department: Department) => void;
   onDeleteAgent: (agentId: string) => void;
+  onDuplicateAgent: (agent: Agent) => void;
+  onIdentityClick: (agent: Agent) => void;
   saving: boolean;
   randomIconSprites: {
     total: [number, number];
@@ -33,6 +37,7 @@ export default function AgentsTab({
   isKo,
   agents,
   departments,
+  orgNodes,
   deptTab,
   setDeptTab,
   search,
@@ -44,6 +49,8 @@ export default function AgentsTab({
   onEditAgent,
   onEditDepartment,
   onDeleteAgent,
+  onDuplicateAgent,
+  onIdentityClick,
   saving,
   randomIconSprites,
 }: AgentsTabProps) {
@@ -148,7 +155,10 @@ export default function AgentsTab({
               locale={locale}
               tr={tr}
               departments={departments}
+              orgNodes={orgNodes}
               onEdit={() => onEditAgent(agent)}
+              onDuplicate={() => onDuplicateAgent(agent)}
+              onIdentityClick={() => onIdentityClick(agent)}
               confirmDeleteId={confirmDeleteId}
               onDeleteClick={() => setConfirmDeleteId(agent.id)}
               onDeleteConfirm={() => onDeleteAgent(agent.id)}

@@ -190,6 +190,18 @@ export default function ChatMessageList({
               );
             }
 
+            if (isCeo) {
+              return (
+                <div key={msg.id} className="flex flex-col items-end gap-1">
+                  <span className="px-1 text-xs text-gray-500">{tr("CEO", "CEO")}</span>
+                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-blue-600 px-4 py-2.5 text-sm text-white shadow-md">
+                    <MessageContent content={msg.content} />
+                  </div>
+                  <span className="px-1 text-xs text-gray-600">{formatTime(msg.created_at, locale)}</span>
+                </div>
+              );
+            }
+
             if (isSystem || msg.receiver_type === "all") {
               return (
                 <div key={msg.id} className="flex flex-col items-center gap-1">
@@ -208,18 +220,6 @@ export default function ChatMessageList({
                     <MessageContent content={msg.content} />
                   </div>
                   <span className="text-xs text-gray-600">{formatTime(msg.created_at, locale)}</span>
-                </div>
-              );
-            }
-
-            if (isCeo) {
-              return (
-                <div key={msg.id} className="flex flex-col items-end gap-1">
-                  <span className="px-1 text-xs text-gray-500">{tr("CEO", "CEO")}</span>
-                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-blue-600 px-4 py-2.5 text-sm text-white shadow-md">
-                    <MessageContent content={msg.content} />
-                  </div>
-                  <span className="px-1 text-xs text-gray-600">{formatTime(msg.created_at, locale)}</span>
                 </div>
               );
             }

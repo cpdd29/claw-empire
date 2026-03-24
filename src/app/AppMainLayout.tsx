@@ -6,6 +6,9 @@ import TaskBoard from "../components/TaskBoard";
 import AgentManager from "../components/AgentManager";
 import SkillsLibrary from "../components/SkillsLibrary";
 import SettingsPanel from "../components/SettingsPanel";
+import MemoryManager from "../components/MemoryManager";
+import WorkflowManager from "../components/WorkflowManager";
+import { ChatPanel } from "../components/ChatPanel";
 import { I18nProvider } from "../i18n";
 import type {
   Agent,
@@ -16,6 +19,7 @@ import type {
   CrossDeptDelivery,
   Department,
   MeetingPresence,
+  Message,
   SubAgent,
   SubTask,
   Task,
@@ -130,6 +134,25 @@ interface AppMainLayoutProps {
   onOpenRoomManager: () => void;
   onDismissAutoUpdateNotice: () => Promise<void>;
   onDismissUpdate: () => void;
+  messages: Message[];
+  streamingMessage: {
+    message_id: string;
+    agent_id: string;
+    agent_name: string;
+    agent_avatar: string;
+    content: string;
+  } | null;
+  onSendMessage: (
+    content: string,
+    receiverType: "agent" | "department" | "all",
+    receiverId?: string,
+    messageType?: string,
+    projectMeta?: { project_id?: string; project_path?: string; project_context?: string },
+  ) => Promise<void>;
+  onSendAnnouncement: (content: string) => Promise<void>;
+  onSendDirective: (content: string, projectMeta?: { project_id?: string; project_path?: string; project_context?: string }) => Promise<void>;
+  onClearMessages: (agentId?: string) => Promise<void>;
+  onCloseAnnouncement: () => void;
   officePackBootstrappingLabel?: string | null;
   children?: ReactNode;
 }
@@ -191,6 +214,13 @@ export default function AppMainLayout({
   onOpenRoomManager,
   onDismissAutoUpdateNotice,
   onDismissUpdate,
+  messages,
+  streamingMessage,
+  onSendMessage,
+  onSendAnnouncement,
+  onSendDirective,
+  onClearMessages,
+  onCloseAnnouncement,
   officePackBootstrappingLabel,
   children,
 }: AppMainLayoutProps) {
@@ -372,7 +402,7 @@ export default function AppMainLayout({
           />
         </div>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 flex flex-col">
           <AppHeaderBar
             currentView={view}
             connected={connected}
@@ -392,7 +422,7 @@ export default function AppMainLayout({
             onOpenDecisionInbox={onOpenDecisionInbox}
             onOpenAgentStatus={onOpenAgentStatus}
             onOpenReportHistory={onOpenReportHistory}
-            onOpenAnnouncement={onOpenAnnouncement}
+            onOpenAnnouncement={() => setView("announcement")}
             onOpenRoomManager={onOpenRoomManager}
             officePackControl={
               view === "office" || view === "agents" || view === "tasks"
@@ -468,6 +498,7 @@ export default function AppMainLayout({
             </div>
           )}
 
+          {view !== "announcement" && (
           <div className="p-3 sm:p-4 lg:p-6">
             {view === "office" && (
               <OfficeView
@@ -541,6 +572,10 @@ export default function AppMainLayout({
 
             {view === "skills" && <SkillsLibrary agents={agents} />}
 
+            {view === "memory" && <MemoryManager />}
+
+            {view === "workflow" && <WorkflowManager />}
+
             {view === "settings" && (
               <SettingsPanel
                 settings={settings}
@@ -556,6 +591,23 @@ export default function AppMainLayout({
               />
             )}
           </div>
+          )}
+
+          {view === "announcement" && (
+            <div className="taskboard-shell flex h-full flex-col gap-4 bg-slate-950 p-3 sm:p-4" style={{overflow:"hidden"}}>
+              <ChatPanel
+                selectedAgent={null}
+                messages={messages}
+                agents={agents}
+                streamingMessage={streamingMessage}
+                onSendMessage={onSendMessage}
+                onSendAnnouncement={onSendAnnouncement}
+                onSendDirective={onSendDirective}
+                onClearMessages={onClearMessages}
+                onClose={() => {}}
+              />
+            </div>
+          )}
         </main>
 
         {children}

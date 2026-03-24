@@ -280,6 +280,29 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
 
     appendTaskLog(id, "system", `Task created: ${title}`);
 
+    // 任务流转：根据被分配 agent 的 tier 自动写入流转记录
+    const assignedAgentId = (body as any).assigned_agent_id ?? null;
+    if (assignedAgentId) {
+      const agentNode = db
+        .prepare("SELECT id, tier, parent_id FROM org_nodes WHERE agent_id = ? LIMIT 1")
+        .get(assignedAgentId) as { id: string; tier: number; parent_id: string | null } | undefined;
+      const nodeId = agentNode?.id ?? null;
+      if (nodeId && agentNode) {
+          let fromNodeId: string | null = null;
+          if (agentNode.tier === 1) {
+            fromNodeId = "super-ceo-root";
+          } else if (agentNode.tier >= 2) {
+            fromNodeId = agentNode.parent_id;
+          }
+          if (fromNodeId) {
+            db.prepare(
+              `INSERT INTO task_flow_logs (id, task_id, from_node_id, to_node_id, instructions, status, created_at)
+               VALUES (?, ?, ?, ?, ?, 'assigned', ?)`,
+            ).run(randomUUID(), id, fromNodeId, nodeId, title, t);
+          }
+        }
+    }
+
     const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
     broadcast("task_update", task);
     res.json({ id, task });

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Agent, Department, TaskType, WorkflowPackKey } from "../../types";
 import { useI18n } from "../../i18n";
 import { type CreateTaskDraft, type FormFeedback } from "./constants";
@@ -8,6 +8,7 @@ import { submitTaskWithProjectHandling } from "./create-modal/submit-task";
 import { useDraftState } from "./create-modal/useDraftState";
 import { usePathHelperMessages } from "./create-modal/usePathHelperMessages";
 import { useProjectPickerState } from "./create-modal/useProjectPickerState";
+import { listWorkflows, type Workflow } from "../../api/workflows";
 
 interface CreateModalProps {
   agents: Agent[];
@@ -39,6 +40,22 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
   const [submitBusy, setSubmitBusy] = useState(false);
   const [submitWithoutProjectPromptOpen, setSubmitWithoutProjectPromptOpen] = useState(false);
   const [formFeedback, setFormFeedback] = useState<FormFeedback | null>(null);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+
+  useEffect(() => {
+    listWorkflows().then(setWorkflows).catch(() => {});
+  }, []);
+
+  const handleWorkflowChange = useCallback((workflowId: string) => {
+    setSelectedWorkflowId(workflowId);
+    if (workflowId) {
+      const wf = workflows.find((w) => w.id === workflowId);
+      if (wf?.assigned_agent_id) {
+        setAssignAgentId(wf.assigned_agent_id);
+      }
+    }
+  }, [workflows]);
 
   const filteredAgents = useMemo(
     () => (departmentId ? agents.filter((agent) => agent.department_id === departmentId) : agents),
@@ -298,6 +315,9 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
       }}
       onPriorityChange={handlePriorityChange}
       onAssignAgentChange={handleAssignAgentChange}
+      workflows={workflows}
+      selectedWorkflowId={selectedWorkflowId}
+      onWorkflowChange={handleWorkflowChange}
     />
   );
 }

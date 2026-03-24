@@ -12,6 +12,220 @@ import DepartmentsTab from "./agent-manager/DepartmentsTab";
 import { StackedSpriteIcon } from "./agent-manager/EmojiPicker";
 import type { AgentManagerProps, FormData } from "./agent-manager/types";
 import { pickRandomSpritePair } from "./agent-manager/utils";
+import type { OrgNode } from "../types/org-nodes";
+import { TIER_CONFIG } from "../types/org-nodes";
+
+// Identity Modal Component
+function IdentityModal({
+  agent,
+  orgNodes,
+  tr,
+  onClose,
+  onConfirm,
+}: {
+  agent: Agent;
+  orgNodes: OrgNode[];
+  tr: (ko: string, en: string) => string;
+  onClose: () => void;
+  onConfirm: (action: "unbind" | "bind", nodeId: string | null) => void;
+}) {
+  const overlayRef = useCallback((node: HTMLDivElement | null) => node, []);
+  const [saving, setSaving] = useState(false);
+
+  // Find current org node
+  const currentOrgNode = orgNodes.find(
+    (node) =>
+      node.agent_id === agent.id ||
+      (() => {
+        try {
+          const meta = JSON.parse(node.metadata_json || "{}");
+          return meta.agent_id === agent.id;
+        } catch {
+          return false;
+        }
+      })(),
+  );
+
+  // Group available nodes by tier
+  const availableNodes = orgNodes.filter((node) => {
+    // Already bound to this agent
+    if (node.agent_id === agent.id) return false;
+    // Check metadata_json
+    try {
+      const meta = JSON.parse(node.metadata_json || "{}");
+      if (meta.agent_id === agent.id) return false;
+    } catch {}
+    return true;
+  });
+
+  const nodesByTier = useMemo(() => {
+    const grouped: Record<number, OrgNode[]> = {};
+    for (const node of availableNodes) {
+      if (!grouped[node.tier]) grouped[node.tier] = [];
+      grouped[node.tier].push(node);
+    }
+    return grouped;
+  }, [availableNodes]);
+
+  const handleUnbind = async () => {
+    if (!currentOrgNode) return;
+    setSaving(true);
+    try {
+      await api.updateOrgNode(currentOrgNode.id, { agent_id: null });
+      onConfirm("unbind", null);
+    } catch (err) {
+      console.error("Unbind failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBind = async (nodeId: string) => {
+    setSaving(true);
+    try {
+      // Unbind from current node first if exists
+      if (currentOrgNode) {
+        await api.updateOrgNode(currentOrgNode.id, { agent_id: null });
+      }
+      // Bind to new node
+      await api.updateOrgNode(nodeId, { agent_id: agent.id });
+      onConfirm("bind", nodeId);
+    } catch (err) {
+      console.error("Bind failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.6)" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-5 shadow-2xl"
+        style={{
+          background: "var(--th-card-bg)",
+          border: "1px solid var(--th-card-border)",
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold" style={{ color: "var(--th-text-heading)" }}>
+            {tr("身份修改", "Modify Identity")}
+          </h3>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[var(--th-bg-surface-hover)] transition-colors"
+            style={{ color: "var(--th-text-muted)" }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-sm mb-2" style={{ color: "var(--th-text-secondary)" }}>
+            {tr("当前 Agent:", "Current Agent:")} <strong>{agent.name}</strong>
+          </div>
+          {currentOrgNode ? (
+            <div
+              className="p-3 rounded-lg border"
+              style={{
+                background: "var(--th-bg-surface)",
+                borderColor: "var(--th-card-border)",
+              }}
+            >
+              <div className="text-sm" style={{ color: "var(--th-text-primary)" }}>
+                {TIER_CONFIG[currentOrgNode.tier].icon} {TIER_CONFIG[currentOrgNode.tier].label.zh}: {currentOrgNode.name}
+              </div>
+            </div>
+          ) : (
+            <div
+              className="p-3 rounded-lg border text-sm"
+              style={{
+                background: "var(--th-bg-surface)",
+                borderColor: "var(--th-card-border)",
+                color: "var(--th-text-muted)",
+              }}
+            >
+              {tr("未分配身份", "Unassigned")}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-3">
+          {currentOrgNode && (
+            <button
+              onClick={handleUnbind}
+              disabled={saving}
+              className="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 transition-colors disabled:opacity-50"
+            >
+              {tr("解绑", "Unbind")}
+            </button>
+          )}
+
+          {Object.keys(nodesByTier).length > 0 && (
+            <div>
+              <div className="text-xs mb-2" style={{ color: "var(--th-text-muted)" }}>
+                {tr("重新绑定到节点:", "Re-bind to node:")}
+              </div>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {[2, 1, 0]
+                  .filter((tier) => nodesByTier[tier]?.length)
+                  .map((tier) => (
+                    <div key={tier}>
+                      <div
+                        className="text-xs font-medium mb-1"
+                        style={{ color: TIER_CONFIG[tier].color }}
+                      >
+                        {TIER_CONFIG[tier].icon} {TIER_CONFIG[tier].label.zh}
+                      </div>
+                      <div className="space-y-1">
+                        {nodesByTier[tier].map((node) => (
+                          <button
+                            key={node.id}
+                            onClick={() => handleBind(node.id)}
+                            disabled={saving}
+                            className="w-full px-3 py-2 rounded-lg text-left text-sm transition-colors hover:bg-blue-500/10"
+                            style={{
+                              background: "var(--th-bg-surface)",
+                              color: "var(--th-text-primary)",
+                            }}
+                          >
+                            📋 {node.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {Object.keys(nodesByTier).length === 0 && (
+            <div className="text-center py-4 text-sm" style={{ color: "var(--th-text-muted)" }}>
+              {tr("没有可用的空闲节点", "No available nodes")}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 mt-5">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-[var(--th-bg-surface-hover)]"
+            style={{ border: "1px solid var(--th-card-border)", color: "var(--th-text-secondary)" }}
+          >
+            {tr("取消", "Cancel")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AgentManager({
   agents,
@@ -37,6 +251,10 @@ export default function AgentManager({
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // Org nodes for identity management
+  const [orgNodes, setOrgNodes] = useState<OrgNode[]>([]);
+  const [identityModalAgent, setIdentityModalAgent] = useState<Agent | null>(null);
+
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [editDept, setEditDept] = useState<Department | null>(null);
   const [deptOrder, setDeptOrder] = useState<Department[]>([]);
@@ -45,6 +263,11 @@ export default function AgentManager({
   const [draggingDeptId, setDraggingDeptId] = useState<string | null>(null);
   const [dragOverDeptId, setDragOverDeptId] = useState<string | null>(null);
   const [dragOverPosition, setDragOverPosition] = useState<"before" | "after" | null>(null);
+
+  // Load org nodes
+  useEffect(() => {
+    api.listOrgNodes().then(setOrgNodes).catch(console.error);
+  }, []);
 
   const persistIsolatedProfile = useCallback(
     async (nextDepartments: Department[], nextAgents: Agent[]) => {
@@ -115,7 +338,9 @@ export default function AgentManager({
         name_zh: agent.name_zh || "",
         department_id: agent.department_id || "",
         role: agent.role,
+        tier: (agent as any).tier ?? 3,
         cli_provider: agent.cli_provider,
+        api_provider_id: (agent as any).api_provider_id || "",
         avatar_emoji: agent.avatar_emoji,
         sprite_number: computed,
         personality: agent.personality || "",
@@ -141,7 +366,9 @@ export default function AgentManager({
         name_ja: form.name_ja.trim(),
         name_zh: form.name_zh.trim(),
         role: form.role,
+        tier: form.tier,
         cli_provider: form.cli_provider,
+        api_provider_id: form.api_provider_id || null,
         avatar_emoji: form.avatar_emoji || "🤖",
         sprite_number: form.sprite_number,
         personality: form.personality.trim() || null,
@@ -216,6 +443,7 @@ export default function AgentManager({
         }
         onAgentsChange();
       }
+      api.listOrgNodes().then(setOrgNodes).catch(() => {});
       closeModal();
     } catch (err) {
       console.error("Save failed:", err);
@@ -231,8 +459,47 @@ export default function AgentManager({
     modalAgent,
     onAgentsChange,
     persistIsolatedProfile,
+    setOrgNodes,
     useDbBackedPack,
   ]);
+
+  // Duplicate agent
+  const handleDuplicateAgent = useCallback(
+    async (agent: Agent) => {
+      setSaving(true);
+      try {
+        const newAgent = await api.createAgent({
+          name: `${agent.name} (副本)`,
+          name_ko: agent.name_ko ? `${agent.name_ko} (副本)` : "",
+          name_ja: agent.name_ja || "",
+          name_zh: agent.name_zh || "",
+          role: agent.role,
+          cli_provider: agent.cli_provider,
+          avatar_emoji: agent.avatar_emoji,
+          sprite_number: agent.sprite_number,
+          personality: agent.personality,
+          department_id: agent.department_id,
+        });
+        onAgentsChange();
+      } catch (err) {
+        console.error("Duplicate failed:", err);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [onAgentsChange],
+  );
+
+  // Identity modal handlers
+  const handleIdentityClick = useCallback((agent: Agent) => {
+    setIdentityModalAgent(agent);
+  }, []);
+
+  const handleIdentityConfirm = useCallback(() => {
+    setIdentityModalAgent(null);
+    // Refresh org nodes
+    api.listOrgNodes().then(setOrgNodes).catch(console.error);
+  }, []);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -533,6 +800,7 @@ export default function AgentManager({
           isKo={isKo}
           agents={agents}
           departments={departments}
+          orgNodes={orgNodes}
           deptTab={deptTab}
           setDeptTab={setDeptTab}
           search={search}
@@ -544,6 +812,8 @@ export default function AgentManager({
           onEditAgent={openEdit}
           onEditDepartment={openEditDept}
           onDeleteAgent={handleDelete}
+          onDuplicateAgent={handleDuplicateAgent}
+          onIdentityClick={handleIdentityClick}
           saving={saving}
           randomIconSprites={{ total: randomIconSprites.total }}
         />
@@ -600,6 +870,16 @@ export default function AgentManager({
           onSaveDepartment={isIsolatedPack && !useDbBackedPack ? handleIsolatedDepartmentSave : undefined}
           onDeleteDepartment={isIsolatedPack && !useDbBackedPack ? handleIsolatedDepartmentDelete : undefined}
           onClose={closeDeptModal}
+        />
+      )}
+
+      {identityModalAgent && (
+        <IdentityModal
+          agent={identityModalAgent}
+          orgNodes={orgNodes}
+          tr={tr}
+          onClose={() => setIdentityModalAgent(null)}
+          onConfirm={handleIdentityConfirm}
         />
       )}
     </div>

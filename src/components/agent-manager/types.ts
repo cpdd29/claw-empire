@@ -18,7 +18,9 @@ export interface FormData {
   name_zh: string;
   department_id: string;
   role: import("../../types").AgentRole;
+  tier: 0 | 1 | 2 | 3;
   cli_provider: import("../../types").CliProvider;
+  api_provider_id: string;
   avatar_emoji: string;
   sprite_number: number | null;
   personality: string;

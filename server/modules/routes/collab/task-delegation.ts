@@ -84,6 +84,107 @@ interface TaskDelegationDeps {
   startTaskExecutionForAgent: (taskId: string, agent: AgentRow, leaderDeptId: string, leaderDeptName: string) => void;
 }
 
+// ---------------------------------------------------------------------------
+// Tier-based org node routing helpers
+// ---------------------------------------------------------------------------
+
+interface OrgNodeInfo {
+  id: string;
+  tier: number;
+  name: string;
+  parent_id: string | null;
+  department_id: string | null;
+}
+
+/**
+ * Get the org node info for an agent
+ */
+function getAgentOrgNode(db: RuntimeContext["db"], agentId: string): OrgNodeInfo | null {
+  try {
+    const row = db.prepare(`
+      SELECT on2.id, on2.tier, on2.name, on2.parent_id, on2.department_id
+      FROM agents a
+      LEFT JOIN org_nodes on2 ON a.org_node_id = on2.id
+      WHERE a.id = ?
+    `).get(agentId) as OrgNodeInfo | undefined;
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Find the secretary node (tier=1) for a department under SuperCEO
+ * This handles tier=0 -> tier=1 automatic delegation
+ */
+function findSecretaryNodeForDept(db: RuntimeContext["db"], deptId: string): OrgNodeInfo | null {
+  try {
+    // Find the tier=1 node (secretary) that is under SuperCEO and belongs to this department
+    const row = db.prepare(`
+      SELECT id, tier, name, parent_id, department_id
+      FROM org_nodes
+      WHERE department_id = ? AND tier = 1
+      LIMIT 1
+    `).get(deptId) as OrgNodeInfo | undefined;
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Log task flow for org hierarchy tracking, update current_org_node_id, and broadcast.
+ */
+function logTaskFlow(
+  db: RuntimeContext["db"],
+  taskId: string,
+  fromNodeId: string | null,
+  toNodeId: string,
+  instructions: string,
+  broadcast?: (event: string, payload: unknown) => void,
+  status: string = "delegated",
+): void {
+  try {
+    const logId = randomUUID();
+    const t = Date.now();
+    db.prepare(`
+      INSERT INTO task_flow_logs (id, task_id, from_node_id, to_node_id, instructions, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(logId, taskId, fromNodeId, toNodeId, instructions, status, t);
+    // Update current_org_node_id to reflect where the task currently is
+    db.prepare("UPDATE tasks SET current_org_node_id = ?, updated_at = ? WHERE id = ?").run(toNodeId, t, taskId);
+    if (broadcast) {
+      broadcast("task_flow_update", {
+        id: logId,
+        task_id: taskId,
+        from_node_id: fromNodeId,
+        to_node_id: toNodeId,
+        instructions,
+        status,
+        created_at: t,
+      });
+    }
+  } catch {
+    // Best effort - task_flow_logs may not exist yet
+  }
+}
+
+/**
+ * Find the agent bound to an org node
+ */
+function findAgentForOrgNode(db: RuntimeContext["db"], nodeId: string): AgentRow | null {
+  try {
+    const row = db.prepare(`
+      SELECT a.* FROM agents a
+      JOIN org_nodes n ON n.agent_id = a.id
+      WHERE n.id = ?
+    `).get(nodeId) as AgentRow | undefined;
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function createTaskDelegationHandler(deps: TaskDelegationDeps) {
   function inferPackKeyFromAgentId(agentId: string | null | undefined): string | null {
     const normalized = String(agentId ?? "").trim();
@@ -188,6 +289,58 @@ export function createTaskDelegationHandler(deps: TaskDelegationDeps) {
         t,
         t,
       );
+
+      // --- Tier-based org node tracking ---
+      const initiatorOrgNode = getAgentOrgNode(db, teamLeader.id);
+      const initiatorNodeId = initiatorOrgNode?.id ?? null;
+      let currentNodeId: string | null = initiatorNodeId;
+
+      // tier=0 (SuperCEO) task: auto-route to department secretary (tier=1)
+      if (initiatorOrgNode && initiatorOrgNode.tier === 0) {
+        const secretaryNode = findSecretaryNodeForDept(db, leaderDeptId);
+        if (secretaryNode) {
+          currentNodeId = secretaryNode.id;
+          appendTaskLog(taskId, "system", `[OrgRouting] SuperCEO → ${secretaryNode.name} (tier=1): Auto-route to secretary`);
+          logTaskFlow(db, taskId, initiatorNodeId, secretaryNode.id, `Auto-delegated from SuperCEO to ${secretaryNode.name}`, broadcast, "delegated");
+          // Notify secretary agent if one is bound to this node
+          const secretaryAgent = findAgentForOrgNode(db, secretaryNode.id);
+          if (secretaryAgent) {
+            const secName = lang === "ko" ? secretaryAgent.name_ko || secretaryAgent.name : secretaryAgent.name;
+            sendAgentMessage(
+              secretaryAgent,
+              pickL(
+                l(
+                  [`[조직 라우팅] CEO로부터 '${taskTitle}' 업무가 배정되었습니다. 팀장에게 하달합니다.`],
+                  [`[Org Routing] Task '${taskTitle}' delegated from CEO. Forwarding to team leader.`],
+                  [`[組織ルーティング] CEO から '${taskTitle}' が委任されました。チームリーダーへ下達します。`],
+                  [`[组织路由] CEO已将'${taskTitle}'委派给您，正在向组长下达。`],
+                ),
+                lang,
+              ),
+              "chat",
+              "agent",
+              null,
+              taskId,
+            );
+            appendTaskLog(taskId, "system", `[OrgRouting] Secretary agent notified: ${secName}`);
+          }
+        }
+      }
+
+      // Update task with org node tracking fields (initiator_org_node_id only; current_org_node_id is managed by logTaskFlow)
+      db.prepare("UPDATE tasks SET initiator_org_node_id = ?, updated_at = ? WHERE id = ?").run(
+        initiatorNodeId,
+        t,
+        taskId,
+      );
+      // If no secretary hop occurred, set current_org_node_id to initiator
+      if (currentNodeId === initiatorNodeId) {
+        db.prepare("UPDATE tasks SET current_org_node_id = ?, updated_at = ? WHERE id = ?").run(initiatorNodeId, t, taskId);
+      }
+
+      if (currentNodeId && currentNodeId !== initiatorNodeId) {
+        appendTaskLog(taskId, "system", `[OrgRouting] current_node_id = ${currentNodeId}`);
+      }
       registerTaskMessengerRoute(taskId, options);
       recordTaskCreationAudit({
         taskId,
@@ -428,6 +581,22 @@ export function createTaskDelegationHandler(deps: TaskDelegationDeps) {
             );
             db.prepare("UPDATE agents SET current_task_id = ? WHERE id = ?").run(taskId, subordinate.id);
             appendTaskLog(taskId, "system", `${leaderName} → ${subName}`);
+
+            // Org node flow tracking: leader → subordinate
+            const leaderOrgNode = getAgentOrgNode(db, teamLeader.id);
+            const subordinateOrgNode = getAgentOrgNode(db, subordinate.id);
+            if (leaderOrgNode && subordinateOrgNode) {
+              logTaskFlow(
+                db,
+                taskId,
+                leaderOrgNode.id,
+                subordinateOrgNode.id,
+                `${leaderName} delegated to ${subName}`,
+                broadcast,
+                "delegated",
+              );
+              appendTaskLog(taskId, "system", `[OrgRouting] ${leaderOrgNode.name} (tier=${leaderOrgNode.tier}) → ${subordinateOrgNode.name} (tier=${subordinateOrgNode.tier})`);
+            }
 
             broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId));
             broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(subordinate.id));

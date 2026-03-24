@@ -103,7 +103,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   started_at INTEGER,
   completed_at INTEGER,
   created_at INTEGER DEFAULT (unixepoch()*1000),
-  updated_at INTEGER DEFAULT (unixepoch()*1000)
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  initiator_org_node_id TEXT REFERENCES org_nodes(id),
+  current_org_node_id TEXT REFERENCES org_nodes(id)
 );
 
 CREATE TABLE IF NOT EXISTS task_creation_audits (

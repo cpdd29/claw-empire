@@ -1,8 +1,9 @@
 import type { Agent, Department } from "../../types";
 import { localeName } from "../../i18n";
 import AgentAvatar from "../AgentAvatar";
-import { ROLE_BADGE, ROLE_LABEL, STATUS_DOT } from "./constants";
+import { STATUS_DOT } from "./constants";
 import type { Translator } from "./types";
+import type { OrgNode } from "../../types/org-nodes";
 
 interface AgentCardProps {
   agent: Agent;
@@ -11,7 +12,10 @@ interface AgentCardProps {
   locale: string;
   tr: Translator;
   departments: Department[];
+  orgNodes: OrgNode[];
   onEdit: () => void;
+  onDuplicate: () => void;
+  onIdentityClick: () => void;
   confirmDeleteId: string | null;
   onDeleteClick: () => void;
   onDeleteConfirm: () => void;
@@ -26,7 +30,10 @@ export default function AgentCard({
   locale,
   tr,
   departments,
+  orgNodes,
   onEdit,
+  onDuplicate,
+  onIdentityClick,
   confirmDeleteId,
   onDeleteClick,
   onDeleteConfirm,
@@ -35,6 +42,42 @@ export default function AgentCard({
 }: AgentCardProps) {
   const isDeleting = confirmDeleteId === agent.id;
   const dept = departments.find((d) => d.id === agent.department_id);
+
+  // Find org node identity by matching agent_id (check both agent_id field and metadata_json.agent_id)
+  const findOrgNode = (): OrgNode | undefined => {
+    return orgNodes.find((node) => {
+      // Check direct agent_id field
+      if (node.agent_id === agent.id) return true;
+      // Check metadata_json.agent_id
+      if (node.metadata_json) {
+        try {
+          const meta = JSON.parse(node.metadata_json);
+          if (meta.agent_id === agent.id) return true;
+        } catch {}
+      }
+      return false;
+    });
+  };
+
+  const orgNode = findOrgNode();
+
+  const TIER_BADGE: Record<number, { label: string; cls: string }> = {
+    0: { label: "👑 SuperCEO", cls: "bg-amber-500/15 text-amber-400 border border-amber-500/30" },
+    1: { label: "📋 秘书",     cls: "bg-violet-500/15 text-violet-400 border border-violet-500/30" },
+    2: { label: "👥 组长",     cls: "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30" },
+    3: { label: "⚡ 员工",     cls: "bg-orange-500/15 text-orange-400 border border-orange-500/30" },
+  };
+
+  const CLI_DISPLAY: Record<string, string> = {
+    claude: "Claude Code",
+    api: "API 直连",
+    opencode: "OpenCode",
+    gemini: "Gemini CLI",
+    codex: "Codex CLI",
+    kimi: "Kimi Code",
+    copilot: "GitHub Copilot",
+    antigravity: "Antigravity",
+  };
 
   return (
     <div
@@ -64,9 +107,17 @@ export default function AgentCard({
             </span>
           </div>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${ROLE_BADGE[agent.role] || ""}`}>
-              {isKo ? ROLE_LABEL[agent.role]?.ko : ROLE_LABEL[agent.role]?.en}
-            </span>
+            {/* 职级标签 */}
+            {orgNode != null && TIER_BADGE[orgNode.tier] ? (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${TIER_BADGE[orgNode.tier].cls}`}>
+                {TIER_BADGE[orgNode.tier].label}
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md border font-medium bg-slate-500/15 text-slate-400 border-slate-500/30">
+                未分配
+              </span>
+            )}
+            {/* 部门标签 */}
             {dept && (
               <span
                 className="text-[10px] px-1.5 py-0.5 rounded-md"
@@ -88,7 +139,7 @@ export default function AgentCard({
             className="text-[10px] font-mono px-1.5 py-0.5 rounded"
             style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
           >
-            {agent.cli_provider}
+            {CLI_DISPLAY[agent.cli_provider] ?? agent.cli_provider}
           </span>
           {agent.personality && (
             <span
@@ -104,6 +155,15 @@ export default function AgentCard({
           className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Duplicate button */}
+          <button
+            onClick={onDuplicate}
+            className="px-1.5 py-0.5 rounded text-xs hover:bg-blue-500/15 hover:text-blue-400 transition-colors"
+            style={{ color: "var(--th-text-muted)" }}
+            title={tr("复制", "Duplicate")}
+          >
+            📋
+          </button>
           {isDeleting ? (
             <>
               <button

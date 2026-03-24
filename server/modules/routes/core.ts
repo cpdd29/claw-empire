@@ -32,6 +32,9 @@ import { registerAgentRoutes } from "./core/agents/index.ts";
 import { registerDepartmentRoutes } from "./core/departments.ts";
 import { registerGitHubRoutes } from "./core/github-routes.ts";
 import { registerOrgNodeRoutes } from "./core/org-nodes.ts";
+import { registerMemoryRoutes } from "./core/memories.ts";
+import { registerWorkflowRoutes } from "./core/workflows.ts";
+import { registerTaskFlowRoutes } from "./core/task-flow.ts";
 import { registerProjectRoutes } from "./core/projects.ts";
 import { registerTaskCrudRoutes } from "./core/tasks/crud.ts";
 import { registerTaskExecutionRoutes } from "./core/tasks/execution.ts";
@@ -339,10 +342,17 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
     runInTransaction,
   });
 
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
   // Org Nodes (Hierarchical CEO Structure)
   // ---------------------------------------------------------------------------
   registerOrgNodeRoutes(__ctx);
+  registerMemoryRoutes(__ctx);
+  registerWorkflowRoutes(__ctx);
+
+  // ---------------------------------------------------------------------------
+  // Task Flow (Delegation tracking across org nodes)
+  // ---------------------------------------------------------------------------
+  registerTaskFlowRoutes(__ctx);
 
   // ---------------------------------------------------------------------------
   // Projects

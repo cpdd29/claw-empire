@@ -82,7 +82,7 @@ export default function ChatPanelHeader({
         )}
 
         <div className="flex flex-shrink-0 items-center gap-1">
-          {onClearMessages && visibleMessagesLength > 0 && (
+          {!showAnnouncementBanner && onClearMessages && visibleMessagesLength > 0 && (
             <button
               onClick={() => {
                 if (
@@ -125,6 +125,7 @@ export default function ChatPanelHeader({
             </button>
           )}
 
+          {!showAnnouncementBanner && (
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
@@ -132,6 +133,7 @@ export default function ChatPanelHeader({
           >
             ✕
           </button>
+          )}
         </div>
       </div>
 

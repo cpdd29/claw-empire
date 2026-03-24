@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import {
   discoverVideoArtifact,
   resolveVideoArtifactRelativeCandidates,
@@ -52,6 +53,93 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     getWorktreeDiffSummary,
     hasVisibleDiffSummary,
   } = deps;
+
+  /**
+   * Walk up the org node hierarchy from the current executing node,
+   * inserting task_flow_logs entries and notifying each parent agent.
+   * Max 10 hops to prevent infinite loops.
+   */
+  function reportUpChain(
+    taskId: string,
+    taskTitle: string,
+    summary: string,
+    lang: string,
+  ): void {
+    try {
+      const task = db.prepare("SELECT current_org_node_id FROM tasks WHERE id = ?").get(taskId) as
+        | { current_org_node_id: string | null }
+        | undefined;
+      if (!task?.current_org_node_id) return;
+
+      let currentNodeId: string = task.current_org_node_id;
+      let hops = 0;
+      const MAX_HOPS = 10;
+
+      while (hops < MAX_HOPS) {
+        const currentNode = db.prepare(
+          "SELECT id, tier, name, parent_id FROM org_nodes WHERE id = ?"
+        ).get(currentNodeId) as { id: string; tier: number; name: string; parent_id: string | null } | undefined;
+
+        if (!currentNode || currentNode.tier === 0 || !currentNode.parent_id) break;
+
+        const parentNode = db.prepare(
+          "SELECT id, tier, name, agent_id FROM org_nodes WHERE id = ?"
+        ).get(currentNode.parent_id) as { id: string; tier: number; name: string; agent_id: string | null } | undefined;
+
+        if (!parentNode) break;
+
+        // Write task_flow_log for this upward hop
+        const logId = randomUUID();
+        const t = nowMs();
+        try {
+          db.prepare(`
+            INSERT INTO task_flow_logs (id, task_id, from_node_id, to_node_id, instructions, status, summary, created_at)
+            VALUES (?, ?, ?, ?, ?, 'reported', ?, ?)
+          `).run(logId, taskId, currentNode.id, parentNode.id, `Reported: ${taskTitle}`, summary, t);
+          db.prepare("UPDATE tasks SET current_org_node_id = ?, updated_at = ? WHERE id = ?").run(parentNode.id, t, taskId);
+          broadcast("task_flow_update", {
+            id: logId,
+            task_id: taskId,
+            from_node_id: currentNode.id,
+            to_node_id: parentNode.id,
+            instructions: `Reported: ${taskTitle}`,
+            status: "reported",
+            summary,
+            created_at: t,
+          });
+        } catch {
+          // best effort
+        }
+
+        // Notify parent agent if one is bound
+        if (parentNode.agent_id) {
+          const parentAgent = db.prepare("SELECT * FROM agents WHERE id = ?").get(parentNode.agent_id) as any;
+          if (parentAgent) {
+            const agentName = lang === "ko" ? parentAgent.name_ko || parentAgent.name : parentAgent.name;
+            const reportMsg = pickL(
+              l(
+                [`[업무 보고] '${taskTitle}' 업무가 완료되었습니다. 결과를 검토해 주세요.`],
+                [`[Task Report] '${taskTitle}' has been completed. Please review the result.`],
+                [`[業務報告] '${taskTitle}' が完了しました。結果をご確認ください。`],
+                [`[工作汇报] '${taskTitle}'已完成，请查看结果。`],
+              ),
+              lang as any,
+            );
+            sendAgentMessage(parentAgent, reportMsg, "chat", "agent", null, taskId);
+            appendTaskLog(taskId, "system", `[OrgReporting] ${currentNode.name} → ${agentName} (tier=${parentNode.tier})`);
+          }
+        }
+
+        // Stop at tier=0 (SuperCEO) — notifyCeo handles that
+        if (parentNode.tier === 0) break;
+
+        currentNodeId = parentNode.id;
+        hops++;
+      }
+    } catch {
+      // best effort — never block task completion
+    }
+  }
 
   function handleTaskRunComplete(taskId: string, exitCode: number): void {
     activeProcesses.delete(taskId);
@@ -535,6 +623,13 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
           setTimeout(subtaskNext, nextDelay);
         }
         return;
+      }
+
+      // Report up the org hierarchy before notifying CEO
+      if (task) {
+        const reportLangUp = resolveLang(task.description ?? task.title);
+        const resultSummary = result ? (result.length > 300 ? "..." + result.slice(-300) : result) : "";
+        reportUpChain(taskId, task.title, resultSummary, reportLangUp);
       }
 
       // Notify: task entering review

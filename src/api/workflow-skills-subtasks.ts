@@ -428,9 +428,30 @@ export async function createSubtask(
   return post(`/api/tasks/${taskId}/subtasks`, input) as Promise<SubTask>;
 }
 
-export async function updateSubtask(
-  id: string,
-  data: Partial<Pick<SubTask, "title" | "description" | "status" | "assigned_agent_id" | "blocked_reason">>,
-): Promise<SubTask> {
-  return patch(`/api/subtasks/${id}`, data) as Promise<SubTask>;
+// Task Flow Chain
+export interface TaskFlowNode {
+  node_id: string;
+  node_name: string;
+  node_tier: number;
+  from_node_id: string | null;
+  to_node_id: string;
+  instructions: string | null;
+  status: string;
+  created_at: number;
+}
+
+export async function getTaskFlowChain(taskId: string): Promise<TaskFlowNode[]> {
+  const j = await request<{ ok: boolean; chain: TaskFlowNode[] }>(`/api/task-flow/${taskId}/chain`);
+  return j.chain ?? [];
+}
+
+// Org Node Stats
+export interface OrgNodeStats {
+  node_id: string;
+  active_task_count: number;
+}
+
+export async function getOrgNodeActiveTasks(nodeId: string): Promise<OrgNodeStats> {
+  const j = await request<{ ok: boolean; node_id: string; active_task_count: number }>(`/api/org-nodes/${nodeId}/active-tasks`);
+  return { node_id: j.node_id, active_task_count: j.active_task_count ?? 0 };
 }

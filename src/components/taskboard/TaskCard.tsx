@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Agent, Department, SubTask, Task, TaskStatus } from "../../types";
 import { useI18n } from "../../i18n";
 import AgentAvatar from "../AgentAvatar";
@@ -13,6 +13,7 @@ import {
   taskStatusLabel,
   timeAgo,
 } from "./constants";
+import { getTaskFlowChain, type TaskFlowNode } from "../../api/workflow-skills-subtasks";
 
 interface TaskCardProps {
   task: Task;
@@ -69,6 +70,11 @@ export default function TaskCard({
   const [showDiff, setShowDiff] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [agentWarning, setAgentWarning] = useState(false);
+  const [flowChain, setFlowChain] = useState<TaskFlowNode[]>([]);
+
+  useEffect(() => {
+    getTaskFlowChain(task.id).then(setFlowChain).catch(() => {});
+  }, [task.id]);
 
   const assignedAgent = task.assigned_agent ?? agents.find((agent) => agent.id === task.assigned_agent_id);
   const fallbackAssignedName =
@@ -413,6 +419,20 @@ export default function TaskCard({
           </button>
         )}
       </div>
+
+      {flowChain.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-slate-700 flex flex-wrap items-center gap-1">
+          {flowChain.map((node, i) => {
+            const icon = node.node_tier === 0 ? "👑" : node.node_tier === 1 ? "📋" : node.node_tier === 2 ? "👥" : "⚡";
+            return (
+              <span key={node.node_id} className="flex items-center gap-1">
+                {i > 0 && <span className="text-slate-600 text-[10px]">→</span>}
+                <span className="text-[10px] text-slate-500">{icon} {node.node_name}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {showDiff && <DiffModal taskId={task.id} onClose={() => setShowDiff(false)} />}
     </div>
