@@ -140,7 +140,6 @@ function migrateOrgNodesDefaults(db: DbLike): void {
   // Check if we need migration: look at the PRAGMA info
   try {
     const columns = db.prepare("PRAGMA table_info(org_nodes)").all() as Array<{ name: string; notnull: number; dflt_value: string | null }>;
-    console.log("[Claw-Empire] Current org_nodes table structure:", JSON.stringify(columns, null, 2));
     const colMap = new Map(columns.map((c) => [c.name, c]));
 
     const needsMigration = ["name_ko", "name_ja", "name_zh"].some((col) => {
