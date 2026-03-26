@@ -9,6 +9,7 @@ export interface Department {
   name_ko: string;
   name_ja?: string | null;
   name_zh?: string | null;
+  office_id?: string | null;
   icon: string;
   color: string;
   description: string | null;
@@ -16,6 +17,20 @@ export interface Department {
   sort_order: number;
   created_at: number;
   agent_count?: number;
+}
+
+// Office
+export interface Office {
+  id: string;
+  name: string;
+  name_ko: string;
+  name_ja?: string | null;
+  name_zh?: string | null;
+  icon: string;
+  description: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
 }
 
 // Agent roles
@@ -44,6 +59,8 @@ export interface Agent {
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;
+  agent_config?: string | null;
+  memory_config?: string | null;
   status: AgentStatus;
   current_task_id: string | null;
   stats_tasks_done: number;

@@ -10,12 +10,60 @@ CREATE TABLE IF NOT EXISTS departments (
   name_ko TEXT NOT NULL,
   name_ja TEXT NOT NULL DEFAULT '',
   name_zh TEXT NOT NULL DEFAULT '',
+  office_id TEXT REFERENCES offices(id) ON DELETE SET NULL,
   icon TEXT NOT NULL,
   color TEXT NOT NULL,
   description TEXT,
   prompt TEXT,
   sort_order INTEGER NOT NULL DEFAULT 99,
   created_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
+CREATE TABLE IF NOT EXISTS offices (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_ko TEXT NOT NULL DEFAULT '',
+  name_ja TEXT NOT NULL DEFAULT '',
+  name_zh TEXT NOT NULL DEFAULT '',
+  icon TEXT NOT NULL DEFAULT '🏢',
+  description TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 99,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
+CREATE TABLE IF NOT EXISTS office_secretary_bindings (
+  office_id TEXT PRIMARY KEY REFERENCES offices(id) ON DELETE CASCADE,
+  secretary_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  org_node_id TEXT REFERENCES org_nodes(id) ON DELETE SET NULL,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  UNIQUE(secretary_agent_id)
+);
+
+CREATE TABLE IF NOT EXISTS secretary_department_bindings (
+  secretary_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  office_id TEXT REFERENCES offices(id) ON DELETE CASCADE,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY (secretary_agent_id, department_id)
+);
+
+CREATE TABLE IF NOT EXISTS department_leader_bindings (
+  department_id TEXT PRIMARY KEY REFERENCES departments(id) ON DELETE CASCADE,
+  leader_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  UNIQUE(leader_agent_id)
+);
+
+CREATE TABLE IF NOT EXISTS department_member_bindings (
+  department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  member_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY (department_id, member_agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS office_pack_departments (
@@ -53,6 +101,8 @@ CREATE TABLE IF NOT EXISTS agents (
   avatar_emoji TEXT NOT NULL DEFAULT '🤖',
   sprite_number INTEGER,
   personality TEXT,
+  agent_config TEXT,
+  memory_config TEXT,
   status TEXT NOT NULL DEFAULT 'idle' CHECK(status IN ('idle','working','break','offline')),
   current_task_id TEXT,
   stats_tasks_done INTEGER DEFAULT 0,

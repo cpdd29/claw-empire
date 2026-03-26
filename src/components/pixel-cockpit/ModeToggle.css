@@ -1,0 +1,51 @@
+.pixel-mode-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--task-panel-bg);
+  border: 4px solid var(--task-panel-border);
+  box-shadow:
+    inset 2px 2px 0 var(--task-panel-highlight),
+    4px 4px 0 rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: transform 0.1s steps(4);
+}
+
+.pixel-mode-toggle:hover {
+  transform: translateY(-2px);
+}
+
+.pixel-mode-toggle:active {
+  transform: translateY(0);
+}
+
+.toggle-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  animation: icon-rotate 1s ease-in-out;
+}
+
+@keyframes icon-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toggle-label {
+  font-family: "VT323", monospace;
+  font-size: 16px;
+  color: var(--pixel-white);
+  letter-spacing: 0.05em;
+}

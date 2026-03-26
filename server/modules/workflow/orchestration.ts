@@ -91,6 +91,7 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
   const buildAvailableSkillsPromptBlock =
     __ctx.buildAvailableSkillsPromptBlock ||
     ((provider: string) => `[Available Skills][provider=${provider || "unknown"}][unavailable]`);
+  const buildSecretaryMemoryPromptBlock = __ctx.buildSecretaryMemoryPromptBlock || (() => "");
   const cachedCliStatus = __ctx.cachedCliStatus;
   const cachedModels = __ctx.cachedModels;
   const chooseSafeReply = __ctx.chooseSafeReply;
@@ -461,6 +462,7 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
     pickL,
     l,
     buildAvailableSkillsPromptBlock,
+    buildSecretaryMemoryPromptBlock,
     buildTaskExecutionPrompt,
     hasExplicitWarningFixRequest,
     getNextHttpAgentPid,
@@ -652,6 +654,8 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
     prettyStreamJson,
     getWorktreeDiffSummary,
     hasVisibleDiffSummary,
+    runAgentOneShot,
+    getRecentConversationContext,
   });
 
   function handleTaskRunComplete(taskId: string, exitCode: number): void {

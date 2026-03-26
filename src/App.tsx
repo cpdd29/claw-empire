@@ -1,6 +1,5 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import type { DecisionInboxItem } from "./components/chat/decision-inbox";
-import OrgTreeManager from "./components/OrgTreeManager";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type {
   Department,
@@ -196,6 +195,8 @@ export default function App() {
       avatar_emoji: draft.avatar_emoji,
       sprite_number: draft.sprite_number,
       personality: draft.personality,
+      agent_config: draft.agent_config,
+      memory_config: draft.memory_config,
       status: "idle",
       current_task_id: null,
       stats_tasks_done: 0,
@@ -481,19 +482,7 @@ export default function App() {
       onClearMessages={actions.handleClearMessages}
       onCloseAnnouncement={() => setView("office")}
       officePackBootstrappingLabel={officePackBootstrappingLabel}
-    >
-      {view === "orgtree" && (
-        <div style={{width:"100%", height:"100%", padding:"24px", overflowY:"auto"}}>
-          <OrgTreeManager
-            onBack={() => setView("dashboard")}
-            departments={departments}
-            officePackOptions={listOfficePackOptions("zh")}
-            officePackKey={activePackKey}
-            onChangeOfficeWorkflowPack={handleOfficeWorkflowPackChange}
-          />
-        </div>
-      )}
-    </AppMainLayout>
+    />
     <AppOverlays
       showChat={showChat}
       chatAgent={chatAgent}

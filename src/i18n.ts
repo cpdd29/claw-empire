@@ -16,7 +16,8 @@ type TranslationInput = LangText | string;
 
 function parseLanguage(value?: string | null): UiLanguage | null {
   const code = (value ?? "").toLowerCase().replace("_", "-");
-  if (code === "ko" || code.startsWith("ko-")) return "ko";
+  // Korean UI support is intentionally retired; migrate legacy ko inputs to Chinese.
+  if (code === "ko" || code.startsWith("ko-")) return "zh";
   if (code === "en" || code.startsWith("en-")) return "en";
   if (code === "ja" || code.startsWith("ja-")) return "ja";
   if (code === "zh" || code.startsWith("zh-")) return "zh";
@@ -27,13 +28,13 @@ export function normalizeLanguage(value?: string | null): UiLanguage {
   return parseLanguage(value) ?? "en";
 }
 
-/** 로캘별 이름 반환. 해당 로캘 이름이 비어있으면 영문(name) fallback */
+/** Return the locale-specific name, falling back to the English name when missing. */
 export function localeName(
   locale: UiLanguage | string,
   obj: { name: string; name_ko?: string | null; name_ja?: string | null; name_zh?: string | null },
 ): string {
   const lang = (typeof locale === "string" ? locale : "en").slice(0, 2);
-  if (lang === "ko") return obj.name_ko || obj.name;
+  if (lang === "ko") return obj.name_zh || obj.name;
   if (lang === "ja") return obj.name_ja || obj.name;
   if (lang === "zh") return obj.name_zh || obj.name;
   return obj.name;
@@ -66,7 +67,7 @@ function detectRuntimeLanguage(): UiLanguage {
 export function localeFromLanguage(lang: UiLanguage): string {
   switch (lang) {
     case "ko":
-      return "ko-KR";
+      return "zh-CN";
     case "en":
       return "en-US";
     case "ja":
@@ -81,7 +82,7 @@ export function localeFromLanguage(lang: UiLanguage): string {
 export function pickLang(lang: UiLanguage, text: LangText): string {
   switch (lang) {
     case "ko":
-      return text.ko;
+      return text.zh ?? text.en;
     case "en":
       return text.en;
     case "ja":

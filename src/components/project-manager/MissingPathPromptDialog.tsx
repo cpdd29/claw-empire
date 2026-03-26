@@ -26,7 +26,7 @@ export default function MissingPathPromptDialog({
         <div className="border-b border-slate-700 px-4 py-3">
           <h3 className="text-sm font-semibold text-white">
             {t({
-              ko: "프로젝트 경로 확인",
+              ko: "确认项目路径",
               en: "Confirm Project Path",
               ja: "プロジェクトパス確認",
               zh: "确认项目路径",
@@ -36,7 +36,7 @@ export default function MissingPathPromptDialog({
         <div className="space-y-2 px-4 py-4">
           <p className="text-sm text-slate-200">
             {t({
-              ko: "해당 경로가 없습니다. 추가하시겠습니까?",
+              ko: "该路径不存在。现在创建吗？",
               en: "This path does not exist. Create it now?",
               ja: "このパスは存在しません。作成しますか？",
               zh: "该路径不存在。现在创建吗？",
@@ -48,7 +48,7 @@ export default function MissingPathPromptDialog({
           {prompt.nearestExistingParent && (
             <p className="text-xs text-slate-400">
               {t({
-                ko: `기준 폴더: ${prompt.nearestExistingParent}`,
+                ko: `基准目录：${prompt.nearestExistingParent}`,
                 en: `Base folder: ${prompt.nearestExistingParent}`,
                 ja: `基準フォルダ: ${prompt.nearestExistingParent}`,
                 zh: `基准目录：${prompt.nearestExistingParent}`,
@@ -58,7 +58,7 @@ export default function MissingPathPromptDialog({
           {!prompt.canCreate && (
             <p className="text-xs text-amber-300">
               {t({
-                ko: "현재 권한으로 해당 경로를 생성할 수 없습니다. 다른 경로를 선택해주세요.",
+                ko: "当前权限无法创建此路径，请选择其他路径。",
                 en: "This path is not creatable with current permissions. Choose another path.",
                 ja: "現在の権限ではこのパスを作成できません。別のパスを指定してください。",
                 zh: "当前权限无法创建此路径，请选择其他路径。",
@@ -72,7 +72,7 @@ export default function MissingPathPromptDialog({
             onClick={onCancel}
             className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
           >
-            {t({ ko: "취소", en: "Cancel", ja: "キャンセル", zh: "取消" })}
+            {t({ ko: "取消", en: "Cancel", ja: "キャンセル", zh: "取消" })}
           </button>
           <button
             type="button"
@@ -80,7 +80,7 @@ export default function MissingPathPromptDialog({
             onClick={onConfirmCreate}
             className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {t({ ko: "예", en: "Yes", ja: "はい", zh: "是" })}
+            {t({ ko: "是", en: "Yes", ja: "はい", zh: "是" })}
           </button>
         </div>
       </div>

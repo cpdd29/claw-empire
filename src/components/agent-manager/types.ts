@@ -16,6 +16,7 @@ export interface FormData {
   name_ko: string;
   name_ja: string;
   name_zh: string;
+  office_id: string;
   department_id: string;
   role: import("../../types").AgentRole;
   tier: 0 | 1 | 2 | 3;
@@ -24,6 +25,8 @@ export interface FormData {
   avatar_emoji: string;
   sprite_number: number | null;
   personality: string;
+  agent_config: string;
+  memory_config: string;
 }
 
 export interface DeptForm {
@@ -32,8 +35,8 @@ export interface DeptForm {
   name_ko: string;
   name_ja: string;
   name_zh: string;
+  office_id: string;
   icon: string;
-  color: string;
   description: string;
   prompt: string;
 }

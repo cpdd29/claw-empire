@@ -18,6 +18,7 @@ interface DepartmentsTabProps {
   onCancelOrder: () => void;
   onMoveDept: (index: number, direction: -1 | 1) => void;
   onEditDept: (department: Department) => void;
+  onDeleteDept: (department: Department) => void;
   onDragStart: (deptId: string, event: DragEvent<HTMLDivElement>) => void;
   onDragOver: (deptId: string, event: DragEvent<HTMLDivElement>) => void;
   onDrop: (deptId: string, event: DragEvent<HTMLDivElement>) => void;
@@ -28,7 +29,6 @@ export default function DepartmentsTab({
   tr,
   locale,
   agents,
-  departments,
   deptOrder,
   deptOrderDirty,
   reorderSaving,
@@ -39,6 +39,7 @@ export default function DepartmentsTab({
   onCancelOrder,
   onMoveDept,
   onEditDept,
+  onDeleteDept,
   onDragStart,
   onDragOver,
   onDrop,
@@ -52,21 +53,21 @@ export default function DepartmentsTab({
           style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)" }}
         >
           <span className="text-sm" style={{ color: "var(--th-text-primary)" }}>
-            {tr("순번이 변경되었습니다.", "Order has been changed.")}
+            {tr("排序已变更。", "Order has been changed.")}
           </span>
           <button
             onClick={onSaveOrder}
             disabled={reorderSaving}
             className="ml-auto px-4 py-1.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 transition-all"
           >
-            {reorderSaving ? tr("저장 중...", "Saving...") : tr("순번 저장", "Save Order")}
+            {reorderSaving ? tr("保存中...", "Saving...") : tr("保存排序", "Save Order")}
           </button>
           <button
             onClick={onCancelOrder}
             className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all hover:bg-white/5"
             style={{ color: "var(--th-text-muted)" }}
           >
-            {tr("취소", "Cancel")}
+            {tr("取消", "Cancel")}
           </button>
         </div>
       )}
@@ -74,6 +75,7 @@ export default function DepartmentsTab({
       <div className="space-y-2">
         {deptOrder.map((dept, index) => {
           const agentCountForDept = agents.filter((agent) => agent.department_id === dept.id).length;
+          const leader = agents.find((agent) => agent.department_id === dept.id && agent.role === "team_leader") ?? null;
           const isDragging = draggingDeptId === dept.id;
           const isDragTarget = dragOverDeptId === dept.id && draggingDeptId !== dept.id;
           const showDropBefore = isDragTarget && dragOverPosition === "before";
@@ -117,7 +119,7 @@ export default function DepartmentsTab({
 
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-                style={{ background: `${dept.color}22`, color: dept.color }}
+                style={{ background: "var(--th-bg-surface)", color: "var(--th-text-secondary)" }}
               >
                 {index + 1}
               </div>
@@ -127,14 +129,13 @@ export default function DepartmentsTab({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm" style={{ color: "var(--th-text-heading)" }}>
-                    {localeName(locale, dept)}
+                    {dept.name}
                   </span>
-                  <span className="w-3 h-3 rounded-full inline-block" style={{ background: dept.color }}></span>
                   <span
                     className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: `${dept.color}22`, color: dept.color }}
+                    style={{ background: "var(--th-bg-surface)", color: "var(--th-text-secondary)" }}
                   >
-                    {agentCountForDept} {tr("명", "agents")}
+                    {agentCountForDept} {tr("人", "agents")}
                   </span>
                 </div>
                 {dept.description && (
@@ -142,18 +143,27 @@ export default function DepartmentsTab({
                     {dept.description}
                   </div>
                 )}
+                <div className="text-xs mt-1" style={{ color: "var(--th-text-muted)" }}>
+                  {tr("部长", "Leader")}:{" "}
+                  <span style={{ color: "var(--th-text-secondary)" }}>
+                    {leader ? localeName(locale, leader) : tr("未绑定", "Unassigned")}
+                  </span>
+                </div>
               </div>
-
-              <code className="text-[10px] px-2 py-0.5 rounded opacity-50" style={{ background: "var(--th-input-bg)" }}>
-                {dept.id}
-              </code>
 
               <button
                 onClick={() => onEditDept(dept)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all opacity-0 group-hover:opacity-100 hover:bg-white/10"
                 style={{ color: "var(--th-text-muted)" }}
               >
-                {tr("편집", "Edit")}
+                {tr("编辑", "Edit")}
+              </button>
+              <button
+                onClick={() => onDeleteDept(dept)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-400"
+                style={{ color: "var(--th-text-muted)" }}
+              >
+                {tr("删除", "Delete")}
               </button>
             </div>
           );
@@ -163,7 +173,7 @@ export default function DepartmentsTab({
       {deptOrder.length === 0 && (
         <div className="text-center py-16" style={{ color: "var(--th-text-muted)" }}>
           <div className="text-3xl mb-2">🏢</div>
-          {tr("등록된 부서가 없습니다.", "No departments found.")}
+          {tr("暂无已创建部门。", "No departments found.")}
         </div>
       )}
     </div>

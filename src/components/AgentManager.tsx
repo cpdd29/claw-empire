@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import type { Agent, Department } from "../types";
-import { useI18n } from "../i18n";
+import type { Agent, Department, Office } from "../types";
+import { localeName, useI18n } from "../i18n";
 import * as api from "../api";
 import { normalizeOfficeWorkflowPack } from "../app/office-workflow-pack";
 import { buildSpriteMap } from "./AgentAvatar";
@@ -9,11 +9,16 @@ import AgentsTab from "./agent-manager/AgentsTab";
 import { BLANK, ICON_SPRITE_POOL } from "./agent-manager/constants";
 import DepartmentFormModal from "./agent-manager/DepartmentFormModal";
 import DepartmentsTab from "./agent-manager/DepartmentsTab";
-import { StackedSpriteIcon } from "./agent-manager/EmojiPicker";
 import type { AgentManagerProps, FormData } from "./agent-manager/types";
 import { pickRandomSpritePair } from "./agent-manager/utils";
 import type { OrgNode } from "../types/org-nodes";
 import { TIER_CONFIG } from "../types/org-nodes";
+
+function inferFormTier(agent: Agent): 0 | 1 | 2 | 3 {
+  if (agent.role === "senior") return 1;
+  if (agent.role === "team_leader") return agent.department_id ? 2 : 0;
+  return 3;
+}
 
 // Identity Modal Component
 function IdentityModal({
@@ -54,7 +59,9 @@ function IdentityModal({
     try {
       const meta = JSON.parse(node.metadata_json || "{}");
       if (meta.agent_id === agent.id) return false;
-    } catch {}
+    } catch {
+      // Ignore malformed metadata and keep the node available.
+    }
     return true;
   });
 
@@ -237,19 +244,20 @@ export default function AgentManager({
 }: AgentManagerProps) {
   const { t, locale } = useI18n();
   const isKo = locale.startsWith("ko");
-  const tr = (ko: string, en: string) => t({ ko, en, ja: en, zh: en });
+  const tr = useCallback((zh: string, en: string) => t({ ko: zh, en, ja: en, zh }), [t]);
   const officePackKey = normalizeOfficeWorkflowPack(activeOfficeWorkflowPack);
   const isIsolatedPack = officePackKey !== "development";
   const useDbBackedPack = isIsolatedPack && dbBackedOfficePack;
 
-  const [subTab, setSubTab] = useState<"agents" | "departments">("agents");
+  const subTab: "agents" | "departments" = "agents";
   const [search, setSearch] = useState("");
-  const [deptTab, setDeptTab] = useState("all");
+  const [departmentAssignmentFilter, setDepartmentAssignmentFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const [modalAgent, setModalAgent] = useState<Agent | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<FormData>({ ...BLANK });
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [offices, setOffices] = useState<Office[]>([]);
 
   // Org nodes for identity management
   const [orgNodes, setOrgNodes] = useState<OrgNode[]>([]);
@@ -268,6 +276,132 @@ export default function AgentManager({
   useEffect(() => {
     api.listOrgNodes().then(setOrgNodes).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    api.getOffices().then(setOffices).catch(console.error);
+  }, []);
+
+  const parseNodeMetadata = useCallback((node: OrgNode | null | undefined) => {
+    if (!node?.metadata_json) return {} as Record<string, unknown>;
+    try {
+      return JSON.parse(node.metadata_json) as Record<string, unknown>;
+    } catch {
+      return {} as Record<string, unknown>;
+    }
+  }, []);
+
+  const getNodeOfficeId = useCallback(
+    (node: OrgNode | null | undefined) => {
+      const metadata = parseNodeMetadata(node);
+      return typeof metadata.office_id === "string" ? metadata.office_id : null;
+    },
+    [parseNodeMetadata],
+  );
+
+  const getAgentBoundOrgNodes = useCallback(
+    (agentId: string) =>
+      orgNodes.filter((node) => {
+        if (node.agent_id === agentId) return true;
+        const metadata = parseNodeMetadata(node);
+        return typeof metadata.agent_id === "string" && metadata.agent_id === agentId;
+      }),
+    [orgNodes, parseNodeMetadata],
+  );
+
+  const getSecretaryNodeForAgent = useCallback(
+    (agentId: string) =>
+      orgNodes.find((node) => {
+        if (node.tier !== 1) return false;
+        if (node.agent_id === agentId) return true;
+        const metadata = parseNodeMetadata(node);
+        return typeof metadata.agent_id === "string" && metadata.agent_id === agentId;
+      }) ?? null,
+    [orgNodes, parseNodeMetadata],
+  );
+
+  const clearOfficeBindingFromSecretary = useCallback(
+    async (node: OrgNode | null, agentId?: string) => {
+      if (!node) return;
+      const metadata = parseNodeMetadata(node);
+      const nextMetadata = { ...metadata };
+      let changed = false;
+      if ("office_id" in nextMetadata) {
+        delete nextMetadata.office_id;
+        changed = true;
+      }
+      if (agentId && nextMetadata.agent_id === agentId) {
+        delete nextMetadata.agent_id;
+        changed = true;
+      }
+      if (!changed && node.agent_id !== agentId) return;
+      await api.updateOrgNode(node.id, {
+        ...(node.agent_id === agentId ? { agent_id: null } : {}),
+        metadata_json: Object.keys(nextMetadata).length > 0 ? JSON.stringify(nextMetadata) : null,
+      });
+    },
+    [parseNodeMetadata],
+  );
+
+  const syncSecretaryOfficeBinding = useCallback(
+    async (
+      targetAgent: Pick<Agent, "id" | "name" | "name_ko" | "name_ja" | "name_zh" | "department_id" | "role">,
+      officeId: string | null,
+    ) => {
+      const boundNodes = getAgentBoundOrgNodes(targetAgent.id);
+      const existingNode =
+        boundNodes.find((node) => getNodeOfficeId(node) === officeId) ??
+        boundNodes.find((node) => node.tier === 1) ??
+        boundNodes[0] ??
+        null;
+
+      if (targetAgent.role !== "senior" || !officeId) {
+        await Promise.all(boundNodes.map((node) => clearOfficeBindingFromSecretary(node)));
+        return;
+      }
+
+      const previouslyBoundNodes = orgNodes.filter(
+        (node) => node.tier === 1 && getNodeOfficeId(node) === officeId && node.id !== existingNode?.id,
+      );
+      for (const node of previouslyBoundNodes) {
+        await clearOfficeBindingFromSecretary(node);
+      }
+
+      let secretaryNode = existingNode;
+      if (!secretaryNode) {
+        secretaryNode = await api.createOrgNode({
+          name: targetAgent.name,
+          name_ko: targetAgent.name_ko || targetAgent.name,
+          name_ja: targetAgent.name_ja || targetAgent.name,
+          name_zh: targetAgent.name_zh || targetAgent.name,
+          tier: 1,
+          parent_id: "super-ceo-root",
+          department_id: targetAgent.department_id ?? null,
+          agent_id: targetAgent.id,
+          metadata_json: null,
+        });
+      }
+
+      const metadata = parseNodeMetadata(secretaryNode);
+      const nextMetadata = { ...metadata, office_id: officeId };
+      await api.updateOrgNode(secretaryNode.id, {
+        name: targetAgent.name,
+        name_ko: targetAgent.name_ko || targetAgent.name,
+        name_ja: targetAgent.name_ja || targetAgent.name,
+        name_zh: targetAgent.name_zh || targetAgent.name,
+        tier: 1,
+        parent_id: "super-ceo-root",
+        department_id: null,
+        agent_id: targetAgent.id,
+        metadata_json: JSON.stringify(nextMetadata),
+      });
+
+      const duplicateNodes = boundNodes.filter((node) => node.id !== secretaryNode?.id);
+      for (const node of duplicateNodes) {
+        await clearOfficeBindingFromSecretary(node, targetAgent.id);
+      }
+    },
+    [clearOfficeBindingFromSecretary, getAgentBoundOrgNodes, getNodeOfficeId, orgNodes, parseNodeMetadata],
+  );
 
   const persistIsolatedProfile = useCallback(
     async (nextDepartments: Department[], nextAgents: Agent[]) => {
@@ -292,16 +426,20 @@ export default function AgentManager({
   const spriteMap = buildSpriteMap(agents);
   const randomIconSprites = useMemo(
     () => ({
-      tab: pickRandomSpritePair(ICON_SPRITE_POOL),
       total: pickRandomSpritePair(ICON_SPRITE_POOL),
     }),
     [],
+  );
+  const workingAgentCount = useMemo(
+    () => agents.filter((agent) => agent.status === "working").length,
+    [agents],
   );
 
   const filteredAgents = useMemo(
     () =>
       agents.filter((agent) => {
-        if (deptTab !== "all" && agent.department_id !== deptTab) return false;
+        if (departmentAssignmentFilter === "assigned" && !agent.department_id) return false;
+        if (departmentAssignmentFilter === "unassigned" && agent.department_id) return false;
         if (!search) return true;
         const query = search.toLowerCase();
         return (
@@ -311,8 +449,23 @@ export default function AgentManager({
           (agent.name_zh || "").toLowerCase().includes(query)
         );
       }),
-    [agents, deptTab, search],
+    [agents, departmentAssignmentFilter, search],
   );
+
+  const officeSecretaryAgentIdByOffice = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const node of orgNodes) {
+      if (node.tier !== 1) continue;
+      const officeId = getNodeOfficeId(node);
+      if (!officeId || map.has(officeId)) continue;
+      const metadata = parseNodeMetadata(node);
+      const agentId =
+        node.agent_id || (typeof metadata.agent_id === "string" ? metadata.agent_id : null);
+      if (!agentId) continue;
+      map.set(officeId, agentId);
+    }
+    return map;
+  }, [getNodeOfficeId, orgNodes, parseNodeMetadata]);
 
   const sortedAgents = useMemo(() => {
     const roleOrder: Record<string, number> = { team_leader: 0, senior: 1, junior: 2, intern: 3 };
@@ -321,33 +474,61 @@ export default function AgentManager({
     );
   }, [filteredAgents]);
 
+  const getAgentDeleteBindingSummary = useCallback(
+    (agent: Agent) => {
+      const department = departments.find((item) => item.id === agent.department_id) ?? null;
+      const secretaryNode = agent.role === "senior" ? getSecretaryNodeForAgent(agent.id) : null;
+      const officeId =
+        agent.role === "senior"
+          ? getNodeOfficeId(secretaryNode)
+          : department?.office_id ?? null;
+      const office = officeId ? offices.find((item) => item.id === officeId) ?? null : null;
+      const bindings: string[] = [];
+
+      if (office) {
+        bindings.push(`办公室 ${localeName(locale, office)}`);
+      }
+      if (department) {
+        bindings.push(`部门 ${localeName(locale, department)}`);
+      }
+
+      return bindings.join("、");
+    },
+    [departments, getNodeOfficeId, getSecretaryNodeForAgent, locale, offices],
+  );
+
   const openCreate = useCallback(() => {
     setModalAgent(null);
-    setForm({ ...BLANK, department_id: deptTab !== "all" ? deptTab : departments[0]?.id || "" });
+    setForm({ ...BLANK });
     setShowModal(true);
-  }, [deptTab, departments]);
+  }, []);
 
   const openEdit = useCallback(
     (agent: Agent) => {
       setModalAgent(agent);
       const computed = agent.sprite_number ?? buildSpriteMap(agents).get(agent.id) ?? null;
+      const department = departments.find((item) => item.id === agent.department_id) ?? null;
+      const secretaryNode = agent.role === "senior" ? getSecretaryNodeForAgent(agent.id) : null;
       setForm({
         name: agent.name,
         name_ko: agent.name_ko,
         name_ja: agent.name_ja || "",
         name_zh: agent.name_zh || "",
+        office_id: agent.role === "senior" ? getNodeOfficeId(secretaryNode) ?? "" : department?.office_id ?? "",
         department_id: agent.department_id || "",
         role: agent.role,
-        tier: (agent as any).tier ?? 3,
+        tier: (agent as any).tier ?? inferFormTier(agent),
         cli_provider: agent.cli_provider,
         api_provider_id: (agent as any).api_provider_id || "",
         avatar_emoji: agent.avatar_emoji,
         sprite_number: computed,
         personality: agent.personality || "",
+        agent_config: agent.agent_config || "",
+        memory_config: agent.memory_config || "",
       });
       setShowModal(true);
     },
-    [agents],
+    [agents, departments, getNodeOfficeId, getSecretaryNodeForAgent],
   );
 
   const closeModal = useCallback(() => {
@@ -359,12 +540,15 @@ export default function AgentManager({
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      const departmentId = form.department_id.trim();
+      const isSecretaryRole = form.role === "senior" || form.tier === 1;
+      const departmentId = isSecretaryRole ? "" : form.department_id.trim();
+      const officeId = isSecretaryRole ? form.office_id.trim() || null : null;
+      const normalizedName = form.name.trim();
       const basePayload = {
-        name: form.name.trim(),
-        name_ko: form.name_ko.trim(),
-        name_ja: form.name_ja.trim(),
-        name_zh: form.name_zh.trim(),
+        name: normalizedName,
+        name_ko: form.name_ko.trim() || normalizedName,
+        name_ja: form.name_ja.trim() || normalizedName,
+        name_zh: form.name_zh.trim() || normalizedName,
         role: form.role,
         tier: form.tier,
         cli_provider: form.cli_provider,
@@ -372,6 +556,8 @@ export default function AgentManager({
         avatar_emoji: form.avatar_emoji || "🤖",
         sprite_number: form.sprite_number,
         personality: form.personality.trim() || null,
+        agent_config: form.agent_config.trim() || null,
+        memory_config: form.memory_config.trim() || null,
       };
       if (isIsolatedPack) {
         if (useDbBackedPack) {
@@ -381,6 +567,18 @@ export default function AgentManager({
               department_id: departmentId || null,
               workflow_pack_key: officePackKey,
             });
+            await syncSecretaryOfficeBinding(
+              {
+                id: modalAgent.id,
+                name: basePayload.name,
+                name_ko: basePayload.name_ko,
+                name_ja: basePayload.name_ja,
+                name_zh: basePayload.name_zh,
+                department_id: departmentId || null,
+                role: basePayload.role,
+              },
+              officeId,
+            );
             const nextAgents = agents.map((agent) =>
               agent.id === modalAgent.id
                 ? {
@@ -397,6 +595,18 @@ export default function AgentManager({
               department_id: departmentId || null,
               workflow_pack_key: officePackKey,
             });
+            await syncSecretaryOfficeBinding(
+              {
+                id: createdAgent.id,
+                name: createdAgent.name,
+                name_ko: createdAgent.name_ko,
+                name_ja: createdAgent.name_ja ?? null,
+                name_zh: createdAgent.name_zh ?? null,
+                department_id: departmentId || null,
+                role: createdAgent.role,
+              },
+              officeId,
+            );
             await persistIsolatedProfile(departments, [...agents, createdAgent]);
           }
           onAgentsChange();
@@ -435,11 +645,35 @@ export default function AgentManager({
             ...basePayload,
             department_id: departmentId || null,
           });
+          await syncSecretaryOfficeBinding(
+            {
+              id: modalAgent.id,
+              name: basePayload.name,
+              name_ko: basePayload.name_ko,
+              name_ja: basePayload.name_ja,
+              name_zh: basePayload.name_zh,
+              department_id: departmentId || null,
+              role: basePayload.role,
+            },
+            officeId,
+          );
         } else {
-          await api.createAgent({
+          const createdAgent = await api.createAgent({
             ...basePayload,
             department_id: departmentId || null,
           });
+          await syncSecretaryOfficeBinding(
+            {
+              id: createdAgent.id,
+              name: createdAgent.name,
+              name_ko: createdAgent.name_ko,
+              name_ja: createdAgent.name_ja ?? null,
+              name_zh: createdAgent.name_zh ?? null,
+              department_id: departmentId || null,
+              role: createdAgent.role,
+            },
+            officeId,
+          );
         }
         onAgentsChange();
       }
@@ -460,6 +694,7 @@ export default function AgentManager({
     onAgentsChange,
     persistIsolatedProfile,
     setOrgNodes,
+    syncSecretaryOfficeBinding,
     useDbBackedPack,
   ]);
 
@@ -502,7 +737,17 @@ export default function AgentManager({
   }, []);
 
   const handleDelete = useCallback(
-    async (id: string) => {
+    async (agent: Agent) => {
+      const bindingSummary = getAgentDeleteBindingSummary(agent);
+      if (
+        bindingSummary &&
+        !window.confirm(`该人员绑定了相关部门或办公室：${bindingSummary}，是否删除？`)
+      ) {
+        setConfirmDeleteId(null);
+        return;
+      }
+
+      const id = agent.id;
       setSaving(true);
       try {
         if (isIsolatedPack) {
@@ -531,6 +776,7 @@ export default function AgentManager({
       agents,
       closeModal,
       departments,
+      getAgentDeleteBindingSummary,
       isIsolatedPack,
       modalAgent,
       onAgentsChange,
@@ -674,13 +920,14 @@ export default function AgentManager({
     async (input: {
       mode: "create" | "update";
       id: string;
+      leaderAgentId: string;
       payload: {
         name: string;
         name_ko: string;
         name_ja: string | null;
         name_zh: string | null;
+        office_id: string | null;
         icon: string;
-        color: string;
         description: string | null;
         prompt: string | null;
         sort_order: number;
@@ -697,8 +944,9 @@ export default function AgentManager({
                 name_ko: input.payload.name_ko,
                 name_ja: input.payload.name_ja,
                 name_zh: input.payload.name_zh,
+                office_id: input.payload.office_id,
                 icon: input.payload.icon,
-                color: input.payload.color,
+                color: "#64748b",
                 description: input.payload.description,
                 prompt: input.payload.prompt,
                 sort_order: input.payload.sort_order,
@@ -713,15 +961,34 @@ export default function AgentManager({
                     name_ko: input.payload.name_ko,
                     name_ja: input.payload.name_ja,
                     name_zh: input.payload.name_zh,
+                    office_id: input.payload.office_id,
                     icon: input.payload.icon,
-                    color: input.payload.color,
+                    color: department.color,
                     description: input.payload.description,
                     prompt: input.payload.prompt,
                     sort_order: input.payload.sort_order,
                   }
                 : department,
             );
-      await persistIsolatedProfile(nextDepartments, agents);
+
+      const nextAgents = agents.map((agent) => {
+        if (agent.id === input.leaderAgentId) {
+          return {
+            ...agent,
+            department_id: input.id,
+            role: "team_leader" as const,
+          };
+        }
+        if (agent.department_id === input.id && agent.role === "team_leader") {
+          return {
+            ...agent,
+            role: "senior" as const,
+          };
+        }
+        return agent;
+      });
+
+      await persistIsolatedProfile(nextDepartments, nextAgents);
     },
     [agents, departments, isIsolatedPack, persistIsolatedProfile],
   );
@@ -749,97 +1016,127 @@ export default function AgentManager({
     [agents, departments, isIsolatedPack, persistIsolatedProfile],
   );
 
+  const handleDeleteDept = useCallback(
+    async (department: Department) => {
+      if (!window.confirm(`确认删除部门“${department.name}”吗？`)) return;
+      try {
+        if (isIsolatedPack && !useDbBackedPack) {
+          await handleIsolatedDepartmentDelete(department.id);
+        } else {
+          await api.deleteDepartment(department.id, isIsolatedPack ? { workflowPackKey: officePackKey } : undefined);
+          onAgentsChange();
+        }
+      } catch (err) {
+        console.error("Delete department failed:", err);
+      }
+    },
+    [isIsolatedPack, useDbBackedPack, handleIsolatedDepartmentDelete, officePackKey, onAgentsChange],
+  );
+
   return (
-    <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
-      <div className="flex items-center justify-end gap-2">
-        <button
-          onClick={openCreateDept}
-          className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90 active:opacity-80 shadow-sm"
-          style={{ background: "#7c3aed", color: "#ffffff", boxShadow: "0 1px 3px rgba(124,58,237,0.3)" }}
-        >
-          + {tr("부서 추가", "Add Dept")}
-        </button>
+    <div className="taskboard-shell flex h-full flex-col gap-4 bg-slate-950 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-bold text-white">{tr("员工管理", "Employees")}</h1>
+        <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-400">
+          {tr("当前", "Current")} {agents.length} {tr("名员工", "employees")}
+        </span>
+        <span className="rounded-full border border-slate-700 px-2.5 py-0.5 text-xs text-slate-400">
+          {tr("工作中", "Working")} {workingAgentCount}
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+        {subTab === "departments" && (
+          <button
+            onClick={openCreateDept}
+            className="rounded-lg bg-slate-800 px-4 py-1.5 text-sm font-semibold text-white shadow transition hover:bg-slate-700 active:scale-95"
+          >
+            + {tr("新建部门", "Add Department")}
+          </button>
+        )}
         <button
           onClick={openCreate}
-          className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-sm shadow-blue-600/20"
+          className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white shadow transition hover:bg-blue-500 active:scale-95"
         >
-          + {tr("신규 채용", "Hire Agent")}
+          + {tr("新建员工", "Add Employee")}
         </button>
       </div>
-
-      <div
-        className="flex gap-1 p-1 rounded-xl"
-        style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}
-      >
-        {[
-          {
-            key: "agents" as const,
-            label: tr("직원관리", "Agents"),
-            icon: <StackedSpriteIcon sprites={randomIconSprites.tab} />,
-          },
-          { key: "departments" as const, label: tr("부서관리", "Departments"), icon: "🏢" },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setSubTab(tab.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              subTab === tab.key ? "bg-blue-600 text-white shadow-sm" : "hover:bg-white/5"
-            }`}
-            style={subTab !== tab.key ? { color: "var(--th-text-muted)" } : undefined}
-          >
-            <span>{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
       </div>
 
-      {subTab === "agents" && (
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+        <div className="grid gap-3 px-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(240px,0.8fr)]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="text-xs font-medium text-slate-400 sm:w-24 sm:flex-none">
+              {tr("员工搜索", "Employee Search")}
+            </label>
+            <input
+              type="text"
+              placeholder={tr("按姓名搜索员工", "Search employees by name")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            />
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="text-xs font-medium text-slate-400 sm:w-24 sm:flex-none">
+              {tr("部门筛选", "Department Filter")}
+            </label>
+            <select
+              value={departmentAssignmentFilter}
+              onChange={(e) => setDepartmentAssignmentFilter(e.target.value as "all" | "assigned" | "unassigned")}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="all">{tr("全部部门", "All Departments")}</option>
+              <option value="assigned">{tr("已分配部门", "Assigned Department")}</option>
+              <option value="unassigned">{tr("未分配部门", "Unassigned Department")}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <AgentsTab
           tr={tr}
           locale={locale}
-          isKo={isKo}
           agents={agents}
+          offices={offices}
           departments={departments}
           orgNodes={orgNodes}
-          deptTab={deptTab}
-          setDeptTab={setDeptTab}
-          search={search}
-          setSearch={setSearch}
           sortedAgents={sortedAgents}
           spriteMap={spriteMap}
           confirmDeleteId={confirmDeleteId}
           setConfirmDeleteId={setConfirmDeleteId}
           onEditAgent={openEdit}
-          onEditDepartment={openEditDept}
           onDeleteAgent={handleDelete}
           onDuplicateAgent={handleDuplicateAgent}
           onIdentityClick={handleIdentityClick}
           saving={saving}
           randomIconSprites={{ total: randomIconSprites.total }}
         />
-      )}
+      </div>
 
       {subTab === "departments" && (
-        <DepartmentsTab
-          tr={tr}
-          locale={locale}
-          agents={agents}
-          departments={departments}
-          deptOrder={deptOrder}
-          deptOrderDirty={deptOrderDirty}
-          reorderSaving={reorderSaving}
-          draggingDeptId={draggingDeptId}
-          dragOverDeptId={dragOverDeptId}
-          dragOverPosition={dragOverPosition}
-          onSaveOrder={saveDeptOrder}
-          onCancelOrder={resetDeptOrder}
-          onMoveDept={moveDept}
-          onEditDept={openEditDept}
-          onDragStart={handleDeptDragStart}
-          onDragOver={handleDeptDragOver}
-          onDrop={handleDeptDrop}
-          onDragEnd={clearDeptDragState}
-        />
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <DepartmentsTab
+            tr={tr}
+            locale={locale}
+            agents={agents}
+            departments={departments}
+            deptOrder={deptOrder}
+            deptOrderDirty={deptOrderDirty}
+            reorderSaving={reorderSaving}
+            draggingDeptId={draggingDeptId}
+            dragOverDeptId={dragOverDeptId}
+            dragOverPosition={dragOverPosition}
+            onSaveOrder={saveDeptOrder}
+            onCancelOrder={resetDeptOrder}
+            onMoveDept={moveDept}
+            onEditDept={openEditDept}
+            onDeleteDept={handleDeleteDept}
+            onDragStart={handleDeptDragStart}
+            onDragOver={handleDeptDragOver}
+            onDrop={handleDeptDrop}
+            onDragEnd={clearDeptDragState}
+          />
+        </div>
       )}
 
       {showModal && (
@@ -849,7 +1146,10 @@ export default function AgentManager({
           tr={tr}
           form={form}
           setForm={setForm}
+          offices={offices}
           departments={departments}
+          currentAgentId={modalAgent?.id ?? null}
+          officeSecretaryAgentIdByOffice={officeSecretaryAgentIdByOffice}
           isEdit={!!modalAgent}
           saving={saving}
           onSave={handleSave}
@@ -863,6 +1163,8 @@ export default function AgentManager({
           tr={tr}
           department={editDept}
           departments={departments}
+          offices={offices}
+          agents={agents}
           workflowPackKey={isIsolatedPack ? officePackKey : undefined}
           onSave={() => {
             if (!isIsolatedPack || useDbBackedPack) onAgentsChange();

@@ -1,4 +1,4 @@
-import type { Agent, Department } from "../../types";
+import type { Agent, Department, Office } from "../../types";
 import { localeName } from "../../i18n";
 import AgentAvatar from "../AgentAvatar";
 import { STATUS_DOT } from "./constants";
@@ -8,9 +8,9 @@ import type { OrgNode } from "../../types/org-nodes";
 interface AgentCardProps {
   agent: Agent;
   spriteMap: Map<string, number>;
-  isKo: boolean;
   locale: string;
   tr: Translator;
+  offices: Office[];
   departments: Department[];
   orgNodes: OrgNode[];
   onEdit: () => void;
@@ -26,9 +26,9 @@ interface AgentCardProps {
 export default function AgentCard({
   agent,
   spriteMap,
-  isKo,
   locale,
   tr,
+  offices,
   departments,
   orgNodes,
   onEdit,
@@ -53,13 +53,28 @@ export default function AgentCard({
         try {
           const meta = JSON.parse(node.metadata_json);
           if (meta.agent_id === agent.id) return true;
-        } catch {}
+        } catch {
+          // Ignore malformed metadata and fall back to direct field matching.
+        }
       }
       return false;
     });
   };
 
   const orgNode = findOrgNode();
+  const isSecretary = agent.role === "senior";
+  const officeIdFromNode = (() => {
+    if (!orgNode?.metadata_json) return null;
+    try {
+      const metadata = JSON.parse(orgNode.metadata_json) as Record<string, unknown>;
+      return typeof metadata.office_id === "string" ? metadata.office_id : null;
+    } catch {
+      return null;
+    }
+  })();
+  const office = isSecretary
+    ? (officeIdFromNode ? offices.find((item) => item.id === officeIdFromNode) ?? null : null)
+    : (dept?.office_id ? offices.find((item) => item.id === dept.office_id) ?? null : null);
 
   const TIER_BADGE: Record<number, { label: string; cls: string }> = {
     0: { label: "👑 SuperCEO", cls: "bg-amber-500/15 text-amber-400 border border-amber-500/30" },
@@ -78,6 +93,9 @@ export default function AgentCard({
     copilot: "GitHub Copilot",
     antigravity: "Antigravity",
   };
+
+  const officeName = office ? localeName(locale, office) : null;
+  const departmentName = dept ? localeName(locale, dept) : null;
 
   return (
     <div
@@ -107,7 +125,6 @@ export default function AgentCard({
             </span>
           </div>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-            {/* 职级标签 */}
             {orgNode != null && TIER_BADGE[orgNode.tier] ? (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${TIER_BADGE[orgNode.tier].cls}`}>
                 {TIER_BADGE[orgNode.tier].label}
@@ -117,13 +134,18 @@ export default function AgentCard({
                 未分配
               </span>
             )}
-            {/* 部门标签 */}
-            {dept && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-md"
+              style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
+            >
+              {office ? `${office.icon} ${officeName}` : tr("未绑定办公室", "No Office")}
+            </span>
+            {!isSecretary && (
               <span
                 className="text-[10px] px-1.5 py-0.5 rounded-md"
                 style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
               >
-                {dept.icon} {localeName(locale, dept)}
+                {dept ? `${dept.icon} ${departmentName}` : tr("未绑定部门", "No Department")}
               </span>
             )}
           </div>
@@ -131,31 +153,21 @@ export default function AgentCard({
       </div>
 
       <div
-        className="flex items-center justify-between mt-3 pt-2.5"
+        className="mt-3 space-y-2 border-t pt-2.5"
         style={{ borderTop: "1px solid var(--th-card-border)" }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span
             className="text-[10px] font-mono px-1.5 py-0.5 rounded"
             style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
           >
-            {CLI_DISPLAY[agent.cli_provider] ?? agent.cli_provider}
+            {tr("绑定 Agent", "Bound Agent")} · {CLI_DISPLAY[agent.cli_provider] ?? agent.cli_provider}
           </span>
-          {agent.personality && (
-            <span
-              className="text-[10px] truncate max-w-[120px]"
-              style={{ color: "var(--th-text-muted)" }}
-              title={agent.personality}
-            >
-              {agent.personality}
-            </span>
-          )}
         </div>
         <div
-          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Duplicate button */}
           <button
             onClick={onDuplicate}
             className="px-1.5 py-0.5 rounded text-xs hover:bg-blue-500/15 hover:text-blue-400 transition-colors"
@@ -171,14 +183,14 @@ export default function AgentCard({
                 disabled={saving || agent.status === "working"}
                 className="px-2 py-0.5 rounded text-[10px] font-medium bg-red-600 hover:bg-red-500 text-white disabled:opacity-40 transition-colors"
               >
-                {tr("해고", "Fire")}
+                {tr("移除", "Fire")}
               </button>
               <button
                 onClick={onDeleteCancel}
                 className="px-2 py-0.5 rounded text-[10px] transition-colors"
                 style={{ color: "var(--th-text-muted)" }}
               >
-                {tr("취소", "No")}
+                {tr("取消", "No")}
               </button>
             </>
           ) : (
@@ -186,7 +198,7 @@ export default function AgentCard({
               onClick={onDeleteClick}
               className="px-1.5 py-0.5 rounded text-xs hover:bg-red-500/15 hover:text-red-400 transition-colors"
               style={{ color: "var(--th-text-muted)" }}
-              title={tr("해고", "Fire")}
+              title={tr("移除", "Fire")}
             >
               ✕
             </button>

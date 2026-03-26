@@ -82,6 +82,13 @@ export function useAppLabels({
           ja: "設定",
           zh: "设置",
         })}`;
+      case "orgtree":
+        return `🗂️ ${pickLang(uiLanguage, {
+          ko: "조직架构",
+          en: "Organization",
+          ja: "組織構成",
+          zh: "组织架构",
+        })}`;
       default:
         return "";
     }

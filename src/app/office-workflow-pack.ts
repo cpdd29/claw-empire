@@ -49,6 +49,8 @@ export type OfficePackStarterAgentDraft = {
   avatar_emoji: string;
   sprite_number: number;
   personality: string | null;
+  agent_config: string | null;
+  memory_config: string | null;
 };
 
 type OfficePackSeedProvider = Extract<CliProvider, "claude" | "codex">;
@@ -816,6 +818,8 @@ export function buildOfficePackStarterAgents(params: {
           zh: department?.name_zh || department?.name || deptId,
         },
       }),
+      agent_config: null,
+      memory_config: null,
     });
   };
 

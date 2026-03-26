@@ -1,5 +1,6 @@
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import { DEFAULT_WORKFLOW_PACK_KEY, type WorkflowPackKey } from "../../workflow/packs/definitions.ts";
+import { syncOrganizationRelationMappings } from "../../organization/relationship-mappings.ts";
 import {
   getDepartmentForPack,
   parseWorkflowPackKeyInput,
@@ -14,7 +15,6 @@ export type DepartmentRouteDeps = Pick<
 export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
   const { app, db, broadcast, normalizeTextField, runInTransaction } = deps;
 
-  const PROTECTED_DEPARTMENT_IDS = new Set(["planning", "dev", "design", "qa", "devsecops", "operations"]);
   const hasAgentWorkflowPackColumn = (() => {
     try {
       const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
@@ -172,11 +172,16 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
       const nameKo = normalizeTextField((body as any).name_ko) ?? "";
       const nameJa = normalizeTextField((body as any).name_ja) ?? "";
       const nameZh = normalizeTextField((body as any).name_zh) ?? "";
+      const officeId = normalizeTextField((body as any).office_id) ?? null;
       const icon = normalizeTextField((body as any).icon) ?? "📁";
       const colorInput = normalizeTextField((body as any).color);
       const color = colorInput && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(colorInput) ? colorInput : "#6b7280";
       const description = normalizeTextField((body as any).description);
       const prompt = normalizeTextField((body as any).prompt);
+      if (officeId) {
+        const officeExists = db.prepare("SELECT id FROM offices WHERE id = ?").get(officeId);
+        if (!officeExists) return res.status(400).json({ error: "office_not_found" });
+      }
 
       const maxOrder =
         packKey === DEFAULT_WORKFLOW_PACK_KEY
@@ -189,8 +194,20 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
       try {
         if (packKey === DEFAULT_WORKFLOW_PACK_KEY) {
           db.prepare(
-            "INSERT INTO departments (id, name, name_ko, name_ja, name_zh, icon, color, description, prompt, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          ).run(id, name, nameKo, nameJa, nameZh, icon, color, description || null, prompt || null, maxOrder + 1);
+            "INSERT INTO departments (id, name, name_ko, name_ja, name_zh, office_id, icon, color, description, prompt, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          ).run(
+            id,
+            name,
+            nameKo,
+            nameJa,
+            nameZh,
+            officeId,
+            icon,
+            color,
+            description || null,
+            prompt || null,
+            maxOrder + 1,
+          );
         } else {
           db.prepare(
             "INSERT INTO office_pack_departments (workflow_pack_key, department_id, name, name_ko, name_ja, name_zh, icon, color, description, prompt, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -220,6 +237,7 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
         throw err;
       }
 
+      syncOrganizationRelationMappings(db as any);
       const dept = getDepartmentForPack(db as any, packKey, id);
       broadcast("departments_changed", { workflow_pack_key: packKey });
       res.status(201).json({ department: dept });
@@ -289,6 +307,15 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
         sets.push("name_zh = ?");
         vals.push(normalizeTextField((body as any).name_zh) ?? "");
       }
+      if ((body as any).office_id !== undefined) {
+        const value = normalizeTextField((body as any).office_id) ?? null;
+        if (value) {
+          const officeExists = db.prepare("SELECT id FROM offices WHERE id = ?").get(value);
+          if (!officeExists) return res.status(400).json({ error: "office_not_found" });
+        }
+        sets.push("office_id = ?");
+        vals.push(value);
+      }
       if ((body as any).icon !== undefined) {
         const value = normalizeTextField((body as any).icon);
         if (!value) return res.status(400).json({ error: "invalid_icon" });
@@ -348,6 +375,7 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
         throw err;
       }
 
+      syncOrganizationRelationMappings(db as any);
       const dept = getDepartmentForPack(db as any, packKey, id);
       broadcast("departments_changed", { workflow_pack_key: packKey });
       res.json({ department: dept });
@@ -372,53 +400,60 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
               )
               .get(packKey, id);
       if (!existing) return res.status(404).json({ error: "not_found" });
-      if (packKey === DEFAULT_WORKFLOW_PACK_KEY && PROTECTED_DEPARTMENT_IDS.has(id)) {
-        return res.status(403).json({ error: "department_protected" });
+
+      const boundEmployees =
+        packKey === DEFAULT_WORKFLOW_PACK_KEY
+          ? (db
+              .prepare(
+                `SELECT COUNT(*) AS count
+                 FROM agents
+                 WHERE department_id = ?
+                   AND role IN ('junior', 'intern')
+                   ${hasAgentWorkflowPackColumn ? "AND COALESCE(workflow_pack_key, 'development') = 'development'" : ""}`,
+              )
+              .get(id) as { count?: number } | undefined)
+          : (db
+              .prepare(
+                `SELECT COUNT(*) AS count
+                 FROM agents
+                 WHERE department_id = ?
+                   AND role IN ('junior', 'intern')
+                   ${hasAgentWorkflowPackColumn ? "AND COALESCE(workflow_pack_key, 'development') = ?" : ""}`,
+              )
+              .get(...(hasAgentWorkflowPackColumn ? [id, packKey] : [id])) as { count?: number } | undefined);
+      if (Number(boundEmployees?.count ?? 0) > 0) {
+        return res.status(409).json({ error: "department_has_employees" });
       }
 
-      const agentCount =
-        packKey === DEFAULT_WORKFLOW_PACK_KEY
-          ? ((
-              db
-                .prepare(
-                  `SELECT COUNT(*) AS c FROM agents WHERE department_id = ?${hasAgentWorkflowPackColumn ? " AND COALESCE(workflow_pack_key, 'development') = 'development'" : ""}`,
-                )
-                .get(id) as any
-            )?.c ?? 0)
-          : ((
-              db
-                .prepare(
-                  `SELECT COUNT(*) AS c FROM agents WHERE department_id = ?${hasAgentWorkflowPackColumn ? " AND COALESCE(workflow_pack_key, 'development') = ?" : ""}`,
-                )
-                .get(...(hasAgentWorkflowPackColumn ? [id, packKey] : [id])) as any
-            )?.c ?? 0);
-      if (agentCount > 0) return res.status(409).json({ error: "department_has_agents", agent_count: agentCount });
-      const taskCount =
-        packKey === DEFAULT_WORKFLOW_PACK_KEY
-          ? ((
-              db
-                .prepare(
-                  "SELECT COUNT(*) AS c FROM tasks WHERE department_id = ? AND COALESCE(workflow_pack_key, 'development') = 'development'",
-                )
-                .get(id) as any
-            )?.c ?? 0)
-          : ((
-              db
-                .prepare(
-                  "SELECT COUNT(*) AS c FROM tasks WHERE department_id = ? AND COALESCE(workflow_pack_key, 'development') = ?",
-                )
-                .get(id, packKey) as any
-            )?.c ?? 0);
-      if (taskCount > 0) return res.status(409).json({ error: "department_has_tasks", task_count: taskCount });
-
-      if (packKey === DEFAULT_WORKFLOW_PACK_KEY) {
-        db.prepare("DELETE FROM departments WHERE id = ?").run(id);
-      } else {
-        db.prepare("DELETE FROM office_pack_departments WHERE workflow_pack_key = ? AND department_id = ?").run(
-          packKey,
-          id,
-        );
-      }
+      runInTransaction(() => {
+        if (packKey === DEFAULT_WORKFLOW_PACK_KEY) {
+          db.prepare(
+            `UPDATE agents
+             SET department_id = NULL,
+                 role = CASE WHEN role = 'team_leader' THEN 'senior' ELSE role END
+             WHERE department_id = ?${hasAgentWorkflowPackColumn ? " AND COALESCE(workflow_pack_key, 'development') = 'development'" : ""}`,
+          ).run(id);
+          db.prepare(
+            "UPDATE tasks SET department_id = NULL WHERE department_id = ? AND COALESCE(workflow_pack_key, 'development') = 'development'",
+          ).run(id);
+          db.prepare("DELETE FROM departments WHERE id = ?").run(id);
+        } else {
+          db.prepare(
+            `UPDATE agents
+             SET department_id = NULL,
+                 role = CASE WHEN role = 'team_leader' THEN 'senior' ELSE role END
+             WHERE department_id = ?${hasAgentWorkflowPackColumn ? " AND COALESCE(workflow_pack_key, 'development') = ?" : ""}`,
+          ).run(...(hasAgentWorkflowPackColumn ? [id, packKey] : [id]));
+          db.prepare(
+            "UPDATE tasks SET department_id = NULL WHERE department_id = ? AND COALESCE(workflow_pack_key, 'development') = ?",
+          ).run(id, packKey);
+          db.prepare("DELETE FROM office_pack_departments WHERE workflow_pack_key = ? AND department_id = ?").run(
+            packKey,
+            id,
+          );
+        }
+        syncOrganizationRelationMappings(db as any);
+      });
       broadcast("departments_changed", { workflow_pack_key: packKey });
       res.json({ ok: true });
     } catch (err) {

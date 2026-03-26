@@ -1,0 +1,250 @@
+/* ============================================
+   像素风设计系统 - Pixel Art Design System
+   ============================================ */
+
+:root {
+  /* 8-bit 调色板 - 每通道步进 32 */
+  --pixel-black: #0a0a0a;
+  --pixel-white: #f5f5f5;
+
+  /* 明亮模式 - 天空渐变 */
+  --day-sky-top: #87ceeb;
+  --day-sky-bottom: #e0f6ff;
+  --day-sun: #ffd700;
+
+  /* 暗黑模式 - 夜空渐变 */
+  --night-sky-top: #0f0c29;
+  --night-sky-bottom: #302b63;
+  --night-moon: #f5f5f5;
+
+  /* 大厦颜色 */
+  --building-primary: #1a1c2c;
+  --building-secondary: #334155;
+  --building-accent: #475569;
+
+  /* 玻璃幕墙 */
+  --glass-day-light: #60a5fa;
+  --glass-day-highlight: #93c5fd;
+  --glass-night-light: #1e3a5f;
+  --glass-night-highlight: #3b82f6;
+
+  /* 员工状态指示器 */
+  --employee-bubble-bg: #ffffff;
+  --employee-bubble-border: #1a1c2c;
+  --employee-light-on: #ffbf00;
+  --employee-light-off: #1a1c2c;
+
+  /* 任务面板 */
+  --task-panel-bg: rgba(26, 28, 44, 0.9);
+  --task-panel-border: #0a0a0a;
+  --task-panel-highlight: #ffffff;
+  --task-progress-bg: #334155;
+  --task-progress-fill: #10b981;
+
+  /* 背景大厦 */
+  --bg-building-left: #4a5568;
+  --bg-building-right: #718096;
+
+  /* 底部场景 */
+  --ground-road: #2d3748;
+  --ground-grass: #48bb78;
+  --ground-sidewalk: #a0aec0;
+
+  /* 车辆颜色 */
+  --car-red: #e53e3e;
+  --car-yellow: #ecc94b;
+  --car-blue: #4299e1;
+
+  /* 像素边框 */
+  --pixel-border-size: 4px;
+  --pixel-border-inner: 2px;
+
+  /* 动画时长 */
+  --anim-mode-switch: 800ms;
+  --anim-bubble-float: 2s;
+  --anim-car-move: 10s;
+  --anim-cloud-move: 30s;
+  --anim-bird-move: 12s;
+  --anim-progress-fill: 200ms;
+  --anim-light-flicker: 1.5s;
+}
+
+/* ============================================
+   像素风工具类
+   ============================================ */
+
+.pixel-border {
+  position: relative;
+  box-shadow:
+    var(--pixel-border-size) 0 0 0 var(--pixel-border-color, var(--pixel-black)),
+    calc(var(--pixel-border-size) * -1) 0 0 0 var(--pixel-border-color, var(--pixel-black)),
+    0 var(--pixel-border-size) 0 0 var(--pixel-border-color, var(--pixel-black)),
+    0 calc(var(--pixel-border-size) * -1) 0 0 var(--pixel-border-color, var(--pixel-black));
+}
+
+.pixel-border-inner {
+  box-shadow:
+    inset var(--pixel-border-inner) 0 0 0 var(--pixel-border-inner-color, var(--pixel-white)),
+    inset calc(var(--pixel-border-inner) * -1) 0 0 0 var(--pixel-border-inner-color, var(--pixel-white)),
+    inset 0 var(--pixel-border-inner) 0 0 var(--pixel-border-inner-color, var(--pixel-white)),
+    inset 0 calc(var(--pixel-border-inner) * -1) 0 0 var(--pixel-border-inner-color, var(--pixel-white));
+}
+
+.pixel-perfect {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+.pixel-font {
+  font-family: "Press Start 2P", "VT323", monospace;
+  letter-spacing: 0.05em;
+}
+
+/* 禁止亚像素渲染 */
+.pixel-snapped {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+/* 像素进度条 */
+.pixel-progress {
+  display: flex;
+  gap: 2px;
+  background: var(--progress-bg, var(--task-progress-bg));
+  padding: 2px;
+  height: 16px;
+}
+
+.pixel-progress-bar {
+  display: flex;
+  gap: 2px;
+}
+
+.pixel-block {
+  width: 8px;
+  height: 100%;
+  background: var(--progress-fill, var(--task-progress-fill));
+  animation: pixel-fill var(--anim-progress-fill) steps(1) forwards;
+}
+
+@keyframes pixel-fill {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 像素按钮 */
+.pixel-button {
+  position: relative;
+  background: var(--button-bg, var(--glass-day-light));
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+  image-rendering: pixelated;
+  transition: transform 0.1s steps(4);
+}
+
+.pixel-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.pixel-button:active {
+  transform: translateY(0);
+}
+
+/* 像素工具提示 */
+.pixel-tooltip {
+  position: absolute;
+  background: var(--tooltip-bg, var(--pixel-white));
+  border: 4px solid var(--tooltip-border, var(--pixel-black));
+  padding: 8px;
+  min-width: 120px;
+  z-index: 1000;
+  box-shadow:
+    inset 2px 2px 0 var(--tooltip-highlight, var(--pixel-white)),
+    4px 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* 动画类 */
+.animate-pixel-float {
+  animation: pixel-float var(--anim-bubble-float) ease-in-out infinite;
+}
+
+@keyframes pixel-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-pixel-flicker {
+  animation: pixel-flicker var(--anim-light-flicker) step-end infinite;
+}
+
+@keyframes pixel-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  75% {
+    opacity: 1;
+  }
+}
+
+.animate-pixel-move-linear {
+  animation: pixel-move-linear var(--anim-car-move) linear infinite;
+}
+
+@keyframes pixel-move-linear {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100vw);
+  }
+}
+
+.animate-pixel-move-slow {
+  animation: pixel-move-slow var(--anim-cloud-move) linear infinite;
+}
+
+@keyframes pixel-move-slow {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100vw);
+  }
+}
+
+/* 明亮模式变量 */
+.day-mode {
+  --sky-gradient: linear-gradient(180deg, var(--day-sky-top) 0%, var(--day-sky-bottom) 100%);
+  --glass-color: var(--glass-day-light);
+  --glass-highlight: var(--glass-day-highlight);
+  --employee-indicator: bubble;
+}
+
+/* 暗黑模式变量 */
+.night-mode {
+  --sky-gradient: linear-gradient(180deg, var(--night-sky-top) 0%, var(--night-sky-bottom) 100%);
+  --glass-color: var(--glass-night-light);
+  --glass-highlight: var(--glass-night-highlight);
+  --employee-indicator: light;
+}
+
+/* 模式切换动画 */
+.mode-transition {
+  transition: all var(--anim-mode-switch) ease-in-out;
+}

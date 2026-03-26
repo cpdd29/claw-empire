@@ -5,6 +5,7 @@
  */
 
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
+import { syncOrganizationRelationMappings } from "../../organization/relationship-mappings.ts";
 
 interface OrgNodeInput {
   name: string;
@@ -153,6 +154,7 @@ export function registerOrgNodeRoutes(ctx: RuntimeContext): void {
         db.prepare("UPDATE agents SET org_node_id = ? WHERE id = ?").run(id, agentId);
       }
 
+      syncOrganizationRelationMappings(db as any);
       const node = asOrgNodeRow(db.prepare("SELECT * FROM org_nodes WHERE id = ?").get(id));
       broadcast({ type: "org_node_created", node });
       res.status(201).json({ ok: true, node });
@@ -234,6 +236,7 @@ export function registerOrgNodeRoutes(ctx: RuntimeContext): void {
 
       db.prepare("UPDATE org_nodes SET " + updates.join(", ") + " WHERE id = ?").run(...values);
 
+      syncOrganizationRelationMappings(db as any);
       const node = asOrgNodeRow(db.prepare("SELECT * FROM org_nodes WHERE id = ?").get(id));
       broadcast({ type: "org_node_updated", node });
       res.json({ ok: true, node });
@@ -267,6 +270,7 @@ export function registerOrgNodeRoutes(ctx: RuntimeContext): void {
 
       db.prepare("UPDATE agents SET org_node_id = NULL WHERE org_node_id = ?").run(id);
       db.prepare("DELETE FROM org_nodes WHERE id = ?").run(id);
+      syncOrganizationRelationMappings(db as any);
       broadcast({ type: "org_node_deleted", node_id: id });
       res.json({ ok: true });
     } catch (err: any) {

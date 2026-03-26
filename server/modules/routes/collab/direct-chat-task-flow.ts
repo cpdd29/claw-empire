@@ -135,7 +135,7 @@ export function createDirectTaskFlow(deps: TaskFlowDeps) {
 
     const ack = deps.pickL(
       deps.l(
-        ["지시 확인했습니다. 바로 작업으로 등록하고 착수하겠습니다."],
+        ["已确认指示。我会先登记任务并立即开始执行。"],
         ["Understood. I will register this as a task and start right away."],
         ["指示を確認しました。タスクとして登録し、すぐ着手します。"],
         ["已确认指示。我会先登记任务并立即开始执行。"],
@@ -173,7 +173,7 @@ export function createDirectTaskFlow(deps: TaskFlowDeps) {
     if (agent.role === "team_leader" && agent.department_id) {
       const taskAck = deps.pickL(
         deps.l(
-          ["프로젝트 확인했습니다. 바로 업무로 승격해 진행하겠습니다."],
+          ["已确认项目。将立即升级为任务并执行。"],
           ["Project confirmed. I will escalate this into a task and proceed now."],
           ["プロジェクトを確認しました。タスクに昇格して進めます。"],
           ["已确认项目。将立即升级为任务并执行。"],

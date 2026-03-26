@@ -949,19 +949,19 @@ function resolveStatusLabel(status: string, lang: GatewayLang): string {
     if (lang === "en") return "Started";
     if (lang === "ja") return "開始";
     if (lang === "zh") return "开始";
-    return "진행 시작";
+    return "开始";
   }
   if (status === "review") {
     if (lang === "en") return "In Review";
     if (lang === "ja") return "レビュー中";
     if (lang === "zh") return "审核中";
-    return "검토 중";
+    return "审核中";
   }
   if (status === "done") {
     if (lang === "en") return "Completed";
     if (lang === "ja") return "完了";
     if (lang === "zh") return "完成";
-    return "완료";
+    return "完成";
   }
   return status;
 }

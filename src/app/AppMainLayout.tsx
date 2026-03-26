@@ -8,6 +8,7 @@ import SkillsLibrary from "../components/SkillsLibrary";
 import SettingsPanel from "../components/SettingsPanel";
 import MemoryManager from "../components/MemoryManager";
 import WorkflowManager from "../components/WorkflowManager";
+import OrgPageView from "../components/OrgPageView";
 import { ChatPanel } from "../components/ChatPanel";
 import { I18nProvider } from "../i18n";
 import type {
@@ -229,16 +230,13 @@ export default function AppMainLayout({
   const officePackKey = normalizeOfficeWorkflowPack(activeOfficeWorkflowPack);
   const officePackOptions = useMemo(() => listOfficePackOptions(uiLanguage), [uiLanguage]);
   const officePackLabel =
-    labels.uiLanguage === "ko"
-      ? "오피스 팩"
-      : labels.uiLanguage === "ja"
+    labels.uiLanguage === "ja"
         ? "オフィスパック"
         : labels.uiLanguage === "zh"
           ? "办公室包"
           : "Office Pack";
   const officePackBootstrappingMessage = useMemo(() => {
     if (!officePackBootstrappingLabel) return null;
-    if (uiLanguage === "ko") return `${officePackBootstrappingLabel} 오피스 팩 배치중...`;
     if (uiLanguage === "ja") return `${officePackBootstrappingLabel} オフィスパックを配置中...`;
     if (uiLanguage === "zh") return `${officePackBootstrappingLabel} 办公室包部署中...`;
     return `Deploying ${officePackBootstrappingLabel} office pack...`;
@@ -287,6 +285,8 @@ export default function AppMainLayout({
       avatar_emoji: draft.avatar_emoji,
       sprite_number: draft.sprite_number,
       personality: draft.personality,
+      agent_config: draft.agent_config,
+      memory_config: draft.memory_config,
       status: "idle" as const,
       current_task_id: null,
       stats_tasks_done: 0,
@@ -528,6 +528,7 @@ export default function AppMainLayout({
                 tasks={tasks}
                 companyName={settings.companyName}
                 onPrimaryCtaClick={() => setView("tasks")}
+                departments={departments}
               />
             )}
 
@@ -573,6 +574,8 @@ export default function AppMainLayout({
             {view === "skills" && <SkillsLibrary agents={agents} />}
 
             {view === "memory" && <MemoryManager />}
+
+            {view === "orgtree" && <OrgPageView />}
 
             {view === "workflow" && <WorkflowManager />}
 

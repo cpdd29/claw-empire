@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { appendMemorySections, extractJsonObject, readMemoryFile, writeMemoryFile } from "../../memory-store.ts";
 import {
   discoverVideoArtifact,
   resolveVideoArtifactRelativeCandidates,
   resolveVideoArtifactSpecForTask,
 } from "../packs/video-artifact.ts";
 import { evaluateRemotionOnlyGateFromLogFiles } from "../packs/video-render-engine-gate.ts";
-
 type CreateRunCompleteHandlerDeps = Record<string, any>;
 
 export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
@@ -52,6 +52,8 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     prettyStreamJson,
     getWorktreeDiffSummary,
     hasVisibleDiffSummary,
+    runAgentOneShot,
+    getRecentConversationContext,
   } = deps;
 
   /**
@@ -139,6 +141,148 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     } catch {
       // best effort — never block task completion
     }
+  }
+
+  function loadSecretaryAgent(agentId: string | null): any | null {
+    if (!agentId) return null;
+    try {
+      const tierRow = db.prepare("SELECT 1 AS ok FROM org_nodes WHERE agent_id = ? AND tier = 1 LIMIT 1").get(agentId) as
+        | { ok: number }
+        | undefined;
+      if (!tierRow?.ok) return null;
+      return db
+        .prepare(
+          `
+            SELECT
+              id,
+              name,
+              COALESCE(name_ko, name) AS name_ko,
+              role,
+              personality,
+              status,
+              department_id,
+              current_task_id,
+              avatar_emoji,
+              cli_provider,
+              oauth_account_id,
+              api_provider_id,
+              api_model,
+              cli_model,
+              cli_reasoning_level
+            FROM agents
+            WHERE id = ?
+          `,
+        )
+        .get(agentId) as any;
+    } catch {
+      return null;
+    }
+  }
+
+  function extractSecretaryMemoryFallback(
+    task: { title: string; description: string | null },
+    result: string | null,
+  ): Record<string, unknown> {
+    const summaryText = [task.title, task.description || "", result || ""]
+      .map((part) => String(part || "").replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 240);
+    return {
+      user_info: [],
+      important_decisions: [],
+      conversation_summary: summaryText ? [summaryText] : [],
+      key_preferences: [],
+    };
+  }
+
+  function persistSecretaryTaskMemory(
+    taskId: string,
+    task:
+      | {
+          assigned_agent_id: string | null;
+          title: string;
+          description: string | null;
+          project_path?: string | null;
+        }
+      | undefined,
+    result: string | null,
+  ): void {
+    const agentId = task?.assigned_agent_id;
+    if (!task || !agentId) return;
+
+    const secretaryAgent = loadSecretaryAgent(agentId);
+    if (!secretaryAgent) return;
+
+    void (async () => {
+      try {
+        const currentMemory = readMemoryFile(agentId);
+        const conversationContext = getRecentConversationContext
+          ? String(getRecentConversationContext(agentId, 8) || "")
+          : "";
+        const resultText = String(result || "").trim();
+        const resultTail = resultText.length > 2_000 ? `...${resultText.slice(-2_000)}` : resultText;
+        const prompt = [
+          "[Secretary Memory Extractor]",
+          "你正在为秘书 Agent 提取本次任务完成后应该写入长期记忆的增量信息。",
+          '请返回严格 JSON：{"user_info":[],"important_decisions":[],"conversation_summary":[],"key_preferences":[]}',
+          "规则：",
+          "- 只保留长期有效、后续交互仍有价值的信息",
+          "- 不记录临时执行噪音、冗余日志、无关寒暄",
+          "- 每个数组 0-3 条，尽量短，不要与当前记忆重复",
+          "- 没有内容就返回空数组",
+          "",
+          "[当前记忆]",
+          currentMemory,
+          "",
+          `[任务标题] ${task.title}`,
+          task.description ? `[任务描述]\n${task.description}` : "",
+          conversationContext ? `[近期对话上下文]\n${conversationContext}` : "",
+          resultTail ? `[任务结果摘录]\n${resultTail}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        const run = await runAgentOneShot(secretaryAgent, prompt, {
+          projectPath: task.project_path || process.cwd(),
+          timeoutMs: 90_000,
+          rawOutput: true,
+          noTools: true,
+        });
+        const parsed = extractJsonObject(run.text || "") ?? extractSecretaryMemoryFallback(task, resultTail);
+        const updatedMemory = appendMemorySections(
+          currentMemory,
+          {
+            "## 用户信息": Array.isArray(parsed.user_info) ? parsed.user_info.map(String) : [],
+            "## 重要决策记录": Array.isArray(parsed.important_decisions) ? parsed.important_decisions.map(String) : [],
+            "## 对话摘要": Array.isArray(parsed.conversation_summary) ? parsed.conversation_summary.map(String) : [],
+            "## 关键偏好": Array.isArray(parsed.key_preferences) ? parsed.key_preferences.map(String) : [],
+          },
+          nowMs(),
+        );
+        writeMemoryFile(agentId, updatedMemory);
+        const memoryLogSummary = [
+          ...(Array.isArray(parsed.conversation_summary) ? parsed.conversation_summary : []),
+          ...(Array.isArray(parsed.important_decisions) ? parsed.important_decisions : []),
+        ]
+          .map(String)
+          .filter(Boolean)
+          .join(" | ")
+          .slice(0, 500);
+        db.prepare(
+          "INSERT INTO memory_logs (id, agent_id, content, type, created_at) VALUES (?, ?, ?, 'add', ?)",
+        ).run(
+          `mlog-${Date.now()}-${randomUUID().slice(0, 6)}`,
+          agentId,
+          memoryLogSummary || `任务 ${task.title} 的秘书记忆已更新`,
+          Date.now(),
+        );
+        appendTaskLog(taskId, "system", `Secretary memory updated for agent ${agentId}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        appendTaskLog(taskId, "system", `Secretary memory update skipped: ${message}`);
+      }
+    })();
   }
 
   function handleTaskRunComplete(taskId: string, exitCode: number): void {
@@ -388,6 +532,8 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     }
 
     if (finalExitCode === 0 && task) {
+      persistSecretaryTaskMemory(taskId, task, result);
+
       if (isVideoPreprodTask) {
         const rootVideoTask = !task.source_task_id;
         const shouldCheckArtifactNow = rootVideoTask || isVideoFinalRenderTask;

@@ -1,6 +1,8 @@
+import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createPromptSkillsHelper } from "./prompt-skills.ts";
+import { memoryFilePath, writeMemoryFile } from "../../memory-store.ts";
 
 function createDb(): DatabaseSync {
   const db = new DatabaseSync(":memory:");
@@ -20,9 +22,22 @@ function createDb(): DatabaseSync {
       created_at INTEGER,
       updated_at INTEGER
     );
+
+    CREATE TABLE org_nodes (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT,
+      tier INTEGER
+    );
   `);
   return db;
 }
+
+afterEach(() => {
+  const filePath = memoryFilePath("secretary-memory-test");
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+});
 
 function insertLearnedSkill(
   db: DatabaseSync,
@@ -138,6 +153,27 @@ describe("createPromptSkillsHelper", () => {
       expect(block).toContain("[empty][none]");
       expect(block).toContain("No learned skills recorded in DB yet");
       expect(block).toContain("[MCP Rule]");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("tier=1 비서만 메모리 블록을 프롬프트에 주입한다", () => {
+    const db = createDb();
+    try {
+      db.prepare("INSERT INTO org_nodes (id, agent_id, tier) VALUES ('node-1', 'secretary-memory-test', 1)").run();
+      writeMemoryFile(
+        "secretary-memory-test",
+        "## 用户信息\n\n- 用户来自上海\n\n## 重要决策记录\n\n（暂无）\n\n## 对话摘要\n\n- 已确认统一中文界面\n\n## 关键偏好\n\n- 偏好直接改代码\n",
+      );
+
+      const { buildSecretaryMemoryPromptBlock } = createPromptSkillsHelper(db);
+      const block = buildSecretaryMemoryPromptBlock("secretary-memory-test");
+
+      expect(block).toContain("[Secretary Memory]");
+      expect(block).toContain("用户来自上海");
+      expect(block).toContain("统一中文界面");
+      expect(buildSecretaryMemoryPromptBlock("non-secretary")).toBe("");
     } finally {
       db.close();
     }

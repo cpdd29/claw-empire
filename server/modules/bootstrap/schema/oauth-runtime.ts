@@ -74,6 +74,16 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
     /* already exists */
   }
   try {
+    db.exec("ALTER TABLE agents ADD COLUMN agent_config TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN memory_config TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
     db.exec("ALTER TABLE agents ADD COLUMN name_ja TEXT NOT NULL DEFAULT ''");
   } catch {
     /* already exists */
@@ -153,6 +163,8 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           avatar_emoji TEXT NOT NULL DEFAULT '🤖',
           sprite_number INTEGER,
           personality TEXT,
+          agent_config TEXT,
+          memory_config TEXT,
           status TEXT NOT NULL DEFAULT 'idle' CHECK(status IN ('idle','working','break','offline')),
           current_task_id TEXT,
           stats_tasks_done INTEGER DEFAULT 0,
@@ -163,7 +175,7 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key,
           role, acts_as_planning_leader, cli_provider, oauth_account_id,
           api_provider_id, api_model, cli_model, cli_reasoning_level,
-          avatar_emoji, sprite_number, personality, status, current_task_id,
+          avatar_emoji, sprite_number, personality, agent_config, memory_config, status, current_task_id,
           stats_tasks_done, stats_xp, created_at
         )
         SELECT
@@ -185,6 +197,8 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           avatar_emoji,
           sprite_number,
           personality,
+          agent_config,
+          memory_config,
           status,
           current_task_id,
           stats_tasks_done,

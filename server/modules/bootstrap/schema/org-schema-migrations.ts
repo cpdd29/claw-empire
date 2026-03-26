@@ -36,6 +36,9 @@ export function applyOrgSchemaMigrations(db: DbLike): void {
   ensureWorkflowsTable(db);
   ensureStudiosTable(db);
   ensureDepartmentsStudioLink(db);
+  ensureDepartmentsOfficeLink(db);
+  ensureOrganizationRelationTables(db);
+  backfillDepartmentOfficeLinks(db);
   seedDefaultOrgNodes(db);
 }
 
@@ -334,6 +337,91 @@ function ensureDepartmentsStudioLink(db: DbLike): void {
     db.exec("ALTER TABLE departments ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL");
   } catch {
     /* already exists */
+  }
+}
+
+function ensureDepartmentsOfficeLink(db: DbLike): void {
+  try {
+    db.exec("ALTER TABLE departments ADD COLUMN office_id TEXT REFERENCES offices(id) ON DELETE SET NULL");
+  } catch {
+    /* already exists */
+  }
+}
+
+function ensureOrganizationRelationTables(db: DbLike): void {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS office_secretary_bindings (
+        office_id TEXT PRIMARY KEY REFERENCES offices(id) ON DELETE CASCADE,
+        secretary_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        org_node_id TEXT REFERENCES org_nodes(id) ON DELETE SET NULL,
+        created_at INTEGER DEFAULT (unixepoch()*1000),
+        updated_at INTEGER DEFAULT (unixepoch()*1000),
+        UNIQUE(secretary_agent_id)
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS secretary_department_bindings (
+        secretary_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+        office_id TEXT REFERENCES offices(id) ON DELETE CASCADE,
+        created_at INTEGER DEFAULT (unixepoch()*1000),
+        updated_at INTEGER DEFAULT (unixepoch()*1000),
+        PRIMARY KEY (secretary_agent_id, department_id)
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS department_leader_bindings (
+        department_id TEXT PRIMARY KEY REFERENCES departments(id) ON DELETE CASCADE,
+        leader_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        created_at INTEGER DEFAULT (unixepoch()*1000),
+        updated_at INTEGER DEFAULT (unixepoch()*1000),
+        UNIQUE(leader_agent_id)
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS department_member_bindings (
+        department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+        member_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        created_at INTEGER DEFAULT (unixepoch()*1000),
+        updated_at INTEGER DEFAULT (unixepoch()*1000),
+        PRIMARY KEY (department_id, member_agent_id)
+      )
+    `);
+  } catch {
+    /* already exists */
+  }
+}
+
+function backfillDepartmentOfficeLinks(db: DbLike): void {
+  type OfficeRow = { id: string; name: string };
+  type DepartmentRow = { id: string; name: string; office_id: string | null };
+
+  const offices = db.prepare("SELECT id, name FROM offices ORDER BY sort_order ASC, created_at ASC").all() as OfficeRow[];
+  if (offices.length === 0) return;
+
+  const departments = db
+    .prepare("SELECT id, name, office_id FROM departments ORDER BY sort_order ASC, created_at ASC")
+    .all() as DepartmentRow[];
+  const unbound = departments.filter((department) => !department.office_id);
+  if (unbound.length === 0) return;
+
+  const byId = new Map(offices.map((office) => [office.id, office.id]));
+  const byName = new Map(offices.map((office) => [office.name.trim().toLowerCase(), office.id]));
+  const update = db.prepare("UPDATE departments SET office_id = ? WHERE id = ?");
+
+  if (offices.length === 1) {
+    for (const department of unbound) {
+      update.run(offices[0].id, department.id);
+    }
+    return;
+  }
+
+  for (const department of unbound) {
+    const matchedOfficeId =
+      byId.get(department.id) ?? byName.get(department.name.trim().toLowerCase()) ?? null;
+    if (!matchedOfficeId) continue;
+    update.run(matchedOfficeId, department.id);
   }
 }
 

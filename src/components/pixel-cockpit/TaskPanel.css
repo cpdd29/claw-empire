@@ -1,0 +1,137 @@
+.pixel-task-panel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 280px;
+  min-height: 180px;
+  background: var(--task-panel-bg);
+  z-index: 1000;
+  padding: 12px;
+  box-shadow:
+    inset 2px 2px 0 var(--task-panel-highlight),
+    4px 4px 0 rgba(0, 0, 0, 0.5);
+  border: 4px solid var(--task-panel-border);
+  animation: panel-slide-in 0.3s ease-out;
+}
+
+@keyframes panel-slide-in {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pixel-white);
+  font-family: "VT323", monospace;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.panel-icon {
+  font-size: 20px;
+}
+
+.panel-title {
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.panel-divider {
+  height: 2px;
+  background: var(--task-panel-border);
+  margin: 8px 0;
+  box-shadow: inset 1px 1px 0 var(--task-panel-highlight);
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.task-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-title {
+  color: var(--pixel-white);
+  font-family: "VT323", monospace;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+}
+
+.pixel-progress {
+  background: var(--task-progress-bg);
+  height: 16px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.pixel-progress-bar {
+  display: flex;
+  gap: 2px;
+  transition: width 0.3s steps(10);
+}
+
+.pixel-block {
+  width: 8px;
+  height: 100%;
+  background: var(--task-progress-fill);
+  animation: pixel-fill 0.2s steps(1) forwards;
+}
+
+@keyframes pixel-fill {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.task-progress-text {
+  color: var(--pixel-white);
+  font-family: "VT323", monospace;
+  font-size: 12px;
+  text-align: right;
+}
+
+.no-tasks {
+  color: var(--pixel-white);
+  font-family: "VT323", monospace;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px 0;
+  opacity: 0.7;
+}
+
+/* 滚动条样式 */
+.task-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.task-list::-webkit-scrollbar-track {
+  background: var(--task-panel-bg);
+}
+
+.task-list::-webkit-scrollbar-thumb {
+  background: var(--task-panel-border);
+  border: 2px solid var(--task-panel-highlight);
+}
+
+.task-list::-webkit-scrollbar-thumb:hover {
+  background: var(--task-progress-fill);
+}

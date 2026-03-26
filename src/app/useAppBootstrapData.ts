@@ -80,6 +80,7 @@ export function useAppBootstrapData({
       const nextSettings = shouldAutoAssignLanguage
         ? { ...mergedSettings, language: autoDetectedLanguage }
         : mergedSettings;
+      const migratedLegacyLanguage = typeof sett.language === "string" && sett.language.trim().toLowerCase().startsWith("ko");
 
       setSettings(nextSettings);
       syncClientLanguage(nextSettings.language);
@@ -105,7 +106,7 @@ export function useAppBootstrapData({
         });
       }
 
-      if (shouldAutoAssignLanguage && mergedSettings.language !== autoDetectedLanguage) {
+      if (migratedLegacyLanguage || (shouldAutoAssignLanguage && mergedSettings.language !== autoDetectedLanguage)) {
         api.saveSettings(nextSettings).catch((error) => {
           console.error("Auto language sync failed:", error);
         });

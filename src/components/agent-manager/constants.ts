@@ -14,10 +14,10 @@ export const CLI_PROVIDERS: CliProvider[] = [
 ];
 
 export const ROLE_LABEL: Record<string, { ko: string; en: string }> = {
-  team_leader: { ko: "팀장", en: "Leader" },
-  senior: { ko: "시니어", en: "Senior" },
-  junior: { ko: "주니어", en: "Junior" },
-  intern: { ko: "인턴", en: "Intern" },
+  team_leader: { ko: "组长", en: "Leader" },
+  senior: { ko: "高级", en: "Senior" },
+  junior: { ko: "初级", en: "Junior" },
+  intern: { ko: "实习生", en: "Intern" },
 };
 
 export const ROLE_BADGE: Record<string, string> = {
@@ -38,22 +38,22 @@ export const ICON_SPRITE_POOL = Array.from({ length: 13 }, (_, i) => i + 1);
 
 export const EMOJI_GROUPS: { label: string; labelEn: string; emojis: string[] }[] = [
   {
-    label: "부서/업무",
+    label: "部门/工作",
     labelEn: "Work",
     emojis: ["📊", "💻", "🎨", "🔍", "🛡️", "⚙️", "📁", "🏢", "📋", "📈", "💼", "🗂️", "📌", "🎯", "🔧", "🧪"],
   },
   {
-    label: "사람/표정",
+    label: "人物/表情",
     labelEn: "People",
     emojis: ["🤖", "👤", "👥", "😊", "😎", "🤓", "🧑‍💻", "👨‍🔬", "👩‍🎨", "🧑‍🏫", "🦸", "🦊", "🐱", "🐶", "🐻", "🐼"],
   },
   {
-    label: "사물/기호",
+    label: "物件/符号",
     labelEn: "Objects",
     emojis: ["💡", "🚀", "⚡", "🔥", "💎", "🏆", "🎵", "🎮", "📱", "💾", "🖥️", "📡", "🔑", "🛠️", "📦", "🧩"],
   },
   {
-    label: "자연/색상",
+    label: "自然/颜色",
     labelEn: "Nature",
     emojis: ["🌟", "⭐", "🌈", "🌊", "🌸", "🍀", "🌙", "☀️", "❄️", "🔵", "🟢", "🟡", "🔴", "🟣", "🟠", "⚪"],
   },
@@ -64,6 +64,7 @@ export const BLANK: FormData = {
   name_ko: "",
   name_ja: "",
   name_zh: "",
+  office_id: "",
   department_id: "",
   role: "junior",
   tier: 3,
@@ -72,19 +73,9 @@ export const BLANK: FormData = {
   avatar_emoji: "🤖",
   sprite_number: null,
   personality: "",
+  agent_config: "",
+  memory_config: "",
 };
-
-export const DEPT_COLORS = [
-  "#3b82f6",
-  "#ef4444",
-  "#f59e0b",
-  "#10b981",
-  "#8b5cf6",
-  "#f97316",
-  "#ec4899",
-  "#06b6d4",
-  "#6b7280",
-];
 
 export const DEPT_BLANK: DeptForm = {
   id: "",
@@ -92,8 +83,8 @@ export const DEPT_BLANK: DeptForm = {
   name_ko: "",
   name_ja: "",
   name_zh: "",
+  office_id: "",
   icon: "📁",
-  color: "#3b82f6",
   description: "",
   prompt: "",
 };

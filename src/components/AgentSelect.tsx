@@ -15,10 +15,10 @@ interface AgentSelectProps {
 }
 
 const ROLE_LABELS: Record<string, LangText> = {
-  team_leader: { ko: "팀장", en: "Team Leader", ja: "チームリーダー", zh: "组长" },
-  senior: { ko: "시니어", en: "Senior", ja: "シニア", zh: "高级" },
-  junior: { ko: "주니어", en: "Junior", ja: "ジュニア", zh: "初级" },
-  intern: { ko: "인턴", en: "Intern", ja: "インターン", zh: "实习生" },
+  team_leader: { ko: "组长", en: "Team Leader", ja: "チームリーダー", zh: "组长" },
+  senior: { ko: "高级", en: "Senior", ja: "シニア", zh: "高级" },
+  junior: { ko: "初级", en: "Junior", ja: "ジュニア", zh: "初级" },
+  intern: { ko: "实习生", en: "Intern", ja: "インターン", zh: "实习生" },
 };
 
 export default function AgentSelect({
@@ -63,7 +63,7 @@ export default function AgentSelect({
   };
 
   const effectivePlaceholder =
-    placeholder ?? tr("-- 담당자 없음 --", "-- Unassigned --", "-- 担当者なし --", "-- 无负责人 --");
+    placeholder ?? tr("-- 无负责人 --", "-- Unassigned --", "-- 担当者なし --", "-- 无负责人 --");
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

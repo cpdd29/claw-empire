@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Department, Agent, CompanySettings } from "../types";
 import { useI18n, localeName } from "../i18n";
-import OrgTreeManager from "./OrgTreeManager";
 
 type View = "office" | "agents" | "dashboard" | "tasks" | "skills" | "settings" | "orgtree" | "announcement" | "memory" | "workflow";
 

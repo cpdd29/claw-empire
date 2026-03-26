@@ -1,0 +1,206 @@
+.pixel-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  z-index: -1;
+}
+
+/* 天空渐变 */
+.sky-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--sky-gradient);
+  transition: background var(--anim-mode-switch) ease-in-out;
+}
+
+/* 云朵层 */
+.cloud-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  z-index: 1;
+}
+
+.pixel-cloud {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  opacity: 0.8;
+}
+
+.cloud-shape {
+  position: relative;
+  width: 120px;
+  height: 40px;
+}
+
+.cloud-block {
+  position: absolute;
+  background: var(--pixel-white);
+  border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.cloud-block-1 {
+  width: 40px;
+  height: 30px;
+  left: 10px;
+  top: 10px;
+}
+
+.cloud-block-2 {
+  width: 50px;
+  height: 40px;
+  left: 35px;
+  top: 0;
+}
+
+.cloud-block-3 {
+  width: 40px;
+  height: 35px;
+  left: 70px;
+  top: 5px;
+}
+
+.cloud-block-4 {
+  width: 30px;
+  height: 25px;
+  left: 50px;
+  top: 15px;
+}
+
+/* 鸟儿层 */
+.bird-layer {
+  position: absolute;
+  top: 10%;
+  left: 0;
+  right: 0;
+  height: 30%;
+  z-index: 2;
+}
+
+.pixel-bird {
+  width: 24px;
+  height: 12px;
+}
+
+.bird-shape {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bird-wing-left,
+.bird-wing-right,
+.bird-body {
+  width: 8px;
+  height: 3px;
+  background: var(--pixel-black);
+}
+
+.bird-wing-left {
+  transform: rotate(45deg);
+  margin-right: -2px;
+}
+
+.bird-body {
+  width: 4px;
+  height: 4px;
+}
+
+.bird-wing-right {
+  transform: rotate(-45deg);
+  margin-left: -2px;
+}
+
+.wing-phase-0 .bird-wing-left {
+  transform: rotate(45deg);
+}
+
+.wing-phase-0 .bird-wing-right {
+  transform: rotate(-45deg);
+}
+
+.wing-phase-1 .bird-wing-left {
+  transform: rotate(30deg);
+}
+
+.wing-phase-1 .bird-wing-right {
+  transform: rotate(-30deg);
+}
+
+@keyframes bird-flight {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(10px, -5px);
+  }
+  50% {
+    transform: translate(20px, 0);
+  }
+  75% {
+    transform: translate(10px, 5px);
+  }
+}
+
+/* 背景大厦群 */
+.background-buildings {
+  position: absolute;
+  bottom: 15%;
+  z-index: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.background-buildings.left {
+  left: 0;
+  width: 20%;
+}
+
+.background-buildings.right {
+  right: 0;
+  width: 25%;
+}
+
+.bg-building {
+  position: absolute;
+  bottom: 0;
+  background: var(--bg-building-left);
+  border: 4px solid var(--pixel-black);
+  box-shadow:
+    inset 4px 0 0 rgba(255, 255, 255, 0.1),
+    inset -4px 0 0 rgba(0, 0, 0, 0.2);
+}
+
+.background-buildings.right .bg-building {
+  background: var(--bg-building-right);
+  opacity: 0.7;
+}
+
+.background-buildings.left .bg-building {
+  opacity: 0.4;
+}
+
+/* 明亮模式 */
+.day-mode {
+  --bg-building-left: #4a5568;
+  --bg-building-right: #718096;
+}
+
+/* 暗黑模式 */
+.night-mode {
+  --bg-building-left: #2d3748;
+  --bg-building-right: #4a5568;
+}

@@ -29,6 +29,7 @@ type CreateExecutionStartTaskToolsDeps = {
   pickL: RuntimeContext["pickL"];
   l: RuntimeContext["l"];
   buildAvailableSkillsPromptBlock: RuntimeContext["buildAvailableSkillsPromptBlock"];
+  buildSecretaryMemoryPromptBlock: RuntimeContext["buildSecretaryMemoryPromptBlock"];
   buildTaskExecutionPrompt: RuntimeContext["buildTaskExecutionPrompt"];
   hasExplicitWarningFixRequest: RuntimeContext["hasExplicitWarningFixRequest"];
   getNextHttpAgentPid: RuntimeContext["getNextHttpAgentPid"];
@@ -61,6 +62,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     pickL,
     l,
     buildAvailableSkillsPromptBlock,
+    buildSecretaryMemoryPromptBlock,
     buildTaskExecutionPrompt,
     hasExplicitWarningFixRequest,
     getNextHttpAgentPid,
@@ -220,8 +222,10 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       taskLang,
     );
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
+    const secretaryMemoryPromptBlock = buildSecretaryMemoryPromptBlock(execAgent.id);
     const spawnPrompt = buildTaskExecutionPrompt(
       [
+        secretaryMemoryPromptBlock,
         availableSkillsPromptBlock,
         `[Task Session] id=${executionSession.sessionId} owner=${executionSession.agentId} provider=${executionSession.provider}`,
         "This session is scoped to this task only. Keep context continuity inside this task session and do not mix with other projects.",

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { post, del, patch, request } from "../api/core";
 import { useI18n } from "../i18n";
-import type { Agent, Department } from "../types";
+import type { Agent, Department, WorkflowPackKey } from "../types";
 import { getAgents } from "../api/organization-projects";
 import type { OrgNode, OrgNodeTree, CreateOrgNodeRequest, OrgNodeTier } from "../types/org-nodes";
 import { buildOrgNodeTree, TIER_CONFIG } from "../types/org-nodes";
@@ -9,9 +9,9 @@ import { buildOrgNodeTree, TIER_CONFIG } from "../types/org-nodes";
 interface OrgTreeManagerProps {
   onBack: () => void;
   departments?: Department[];
-  officePackOptions?: { key: string; label: string; summary: string; slug: string; accent: number }[];
-  officePackKey?: string;
-  onChangeOfficeWorkflowPack?: (key: string) => void;
+  officePackOptions?: { key: WorkflowPackKey; label: string; summary: string; slug: string; accent: number }[];
+  officePackKey?: WorkflowPackKey;
+  onChangeOfficeWorkflowPack?: (key: WorkflowPackKey) => void;
 }
 
 interface ApiResponse {
@@ -27,7 +27,13 @@ interface DeleteResponse {
   error?: string;
 }
 
-export default function OrgTreeManager({ onBack, departments = [], officePackOptions = [], officePackKey = "", onChangeOfficeWorkflowPack }: OrgTreeManagerProps) {
+export default function OrgTreeManager({
+  onBack,
+  departments = [],
+  officePackOptions = [],
+  officePackKey = "development",
+  onChangeOfficeWorkflowPack,
+}: OrgTreeManagerProps) {
   const { t, locale } = useI18n();
   const [nodes, setNodes] = useState<OrgNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,7 +187,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
 
     // Validation: tier > 0 requires agent_id
     if (createForm.tier > 0 && !createForm.agent_id) {
-      setError(t({ ko: "担当자를 선택해주세요", en: "Please select an agent", ja: "エージェントを選択してください", zh: "请选择担当人" }));
+      setError(t({ ko: "请选择担当人", en: "Please select an agent", ja: "エージェントを選択してください", zh: "请选择担当人" }));
       return;
     }
 
@@ -388,11 +394,11 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <span className="text-2xl">🏢</span>
-              {t({ ko: "조직架构", en: "Organization Tree", ja: "組織構成", zh: "组织架构" })}
+              {t({ ko: "组织架构", en: "Organization Tree", ja: "組織構成", zh: "组织架构" })}
             </h2>
             <p className="text-sm text-slate-400 mt-1">
               {t({
-                ko: "无限层级嵌套 CEO 구조",
+                ko: "无限层级嵌套",
                 en: "Infinite nested CEO structure",
                 ja: "無限階層構造",
                 zh: "无限层级嵌套",
@@ -421,7 +427,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-violet-600/20 text-violet-300 border border-violet-500/30 rounded-lg hover:bg-violet-600/30 transition-all"
             >
               <span className="text-base">+</span>
-              {t({ ko: "노드 추가", en: "Add Node", ja: "ノード追加", zh: "添加节点" })}
+              {t({ ko: "添加节点", en: "Add Node", ja: "ノード追加", zh: "添加节点" })}
             </button>
             )}
           </div>
@@ -460,8 +466,8 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
         style={{ background: "var(--th-card-bg, #1e293b)", border: "1px solid var(--th-card-border, #334155)" }}
       >
         {([
-          { key: "roles" as const, label: t({ ko: "역할관리", en: "Roles", ja: "役割管理", zh: "角色管理" }), icon: "🏛️" },
-          { key: "departments" as const, label: t({ ko: "부서관리", en: "Departments", ja: "部署管理", zh: "部门管理" }), icon: "🏢" },
+          { key: "roles" as const, label: t({ ko: "角色管理", en: "Roles", ja: "役割管理", zh: "角色管理" }), icon: "🏛️" },
+          { key: "departments" as const, label: t({ ko: "部门管理", en: "Departments", ja: "部署管理", zh: "部门管理" }), icon: "🏢" },
         ]).map((tab) => (
           <button
             key={tab.key}
@@ -503,11 +509,11 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
           {officePackOptions.length > 0 && (
             <div className="bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 rounded-xl p-4">
               <p className="text-xs font-medium text-slate-400 mb-2">
-                {t({ ko: "워크스페이스", en: "Workspace", ja: "ワークスペース", zh: "工作室" })}
+                {t({ ko: "工作室", en: "Workspace", ja: "ワークスペース", zh: "工作室" })}
               </p>
               <select
                 value={officePackKey}
-                onChange={(e) => onChangeOfficeWorkflowPack?.(e.target.value)}
+                onChange={(e) => onChangeOfficeWorkflowPack?.(e.target.value as WorkflowPackKey)}
                 className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               >
                 {officePackOptions.map((option) => (
@@ -588,11 +594,11 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
               </button>
             </div>
             <p className="text-xs text-slate-500 mb-3">
-              {t({ ko: "tier=1 节点 중 선택", en: "Select a tier=1 node", ja: "tier=1ノードを選択", zh: "从 tier=1 节点中选择" })}
+              {t({ ko: "从 tier=1 节点中选择", en: "Select a tier=1 node", ja: "tier=1ノードを選択", zh: "从 tier=1 节点中选择" })}
             </p>
             {tier1Nodes.length === 0 ? (
               <p className="text-sm text-slate-500 py-4 text-center">
-                {t({ ko: "사용 가능한 tier=1 노드 없음", en: "No tier=1 nodes available", ja: "tier=1ノードなし", zh: "暂无 tier=1 节点" })}
+                {t({ ko: "暂无 tier=1 节点", en: "No tier=1 nodes available", ja: "tier=1ノードなし", zh: "暂无 tier=1 节点" })}
               </p>
             ) : (
               <div className="space-y-1 max-h-60 overflow-y-auto">
@@ -624,7 +630,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
             className="w-full max-w-md mx-4 rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl p-6"
           >
             <h3 className="text-lg font-bold mb-5 text-slate-100">
-              {t({ ko: "새 노드 추가", en: "Add New Node", ja: "新規ノード追加", zh: "新增节点" })}
+              {t({ ko: "新增节点", en: "Add New Node", ja: "新規ノード追加", zh: "新增节点" })}
             </h3>
 
             <div className="space-y-4">
@@ -651,7 +657,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                   onChange={(e) => setCreateForm({ ...createForm, name_ko: e.target.value })}
                   className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-colors"
                   placeholder={t({
-                    ko: "韩语/日语/中文",
+                    ko: "本地名称",
                     en: "Korean/Japanese/Chinese",
                     ja: "韓国語/日本語/中国語",
                     zh: "韩语/日语/中文",
@@ -661,7 +667,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
 
               <div>
                 <label className="block text-sm font-medium mb-1.5 text-slate-300">
-                  {t({ ko: "직급 (Tier)", en: "Role (Tier)", ja: "役職", zh: "角色 (Tier)" })}
+                  {t({ ko: "角色 (Tier)", en: "Role (Tier)", ja: "役職", zh: "角色 (Tier)" })}
                 </label>
                 <select
                   value={createForm.tier}
@@ -687,7 +693,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
 
               <div>
                 <label className="block text-sm font-medium mb-1.5 text-slate-300">
-                  {t({ ko: "상위 노드", en: "Parent Node", ja: "親ノード", zh: "上级节点" })}
+                  {t({ ko: "上级节点", en: "Parent Node", ja: "親ノード", zh: "上级节点" })}
                 </label>
                 <select
                   value={createForm.parent_id}
@@ -696,7 +702,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                 >
                   <option value="">
                     --{" "}
-                    {t({ ko: "없음 (루트)", en: "None (Root)", ja: "なし (ルート)", zh: "无 (根节点)" })} --
+                    {t({ ko: "无 (根节点)", en: "None (Root)", ja: "なし (ルート)", zh: "无 (根节点)" })} --
                   </option>
                   {nodes.map((node) => (
                     <option key={node.id} value={node.id}>
@@ -710,7 +716,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
               {createForm.tier > 0 && (
                 <div>
                   <label className="block text-sm font-medium mb-1.5 text-slate-300">
-                    {t({ ko: "担当자", en: "Agent", ja: "担当者", zh: "担当人" })} <span className="text-red-400">*</span>
+                    {t({ ko: "担当人", en: "Agent", ja: "担当者", zh: "担当人" })} <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={createForm.agent_id}
@@ -719,7 +725,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                     required
                   >
                     <option value="">
-                      -- {t({ ko: "선택하세요", en: "Select", ja: "選択してください", zh: "请选择" })} --
+                      -- {t({ ko: "请选择", en: "Select", ja: "選択してください", zh: "请选择" })} --
                     </option>
                     {allAgents
                       .filter((agent) => {
@@ -746,7 +752,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                   </select>
                   <p className="text-xs text-amber-400 mt-1">
                     {t({
-                      ko: "⚠️ 한 명의 담당자는 하나의 노드에만 할당 가능",
+                      ko: "⚠️ 一人只能绑定一个节点",
                       en: "⚠️ One agent can only be assigned to one node",
                       ja: "⚠️ 一人のエージェントは一つのノードにのみ割り当て可能",
                       zh: "⚠️ 一人只能绑定一个节点",
@@ -762,10 +768,10 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                 onClick={() => setShowCreateForm(false)}
                 className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
               >
-                {t({ ko: "취소", en: "Cancel", ja: "キャンセル", zh: "取消" })}
+                {t({ ko: "取消", en: "Cancel", ja: "キャンセル", zh: "取消" })}
               </button>
               <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium">
-                {t({ ko: "추가", en: "Add", ja: "追加", zh: "添加" })}
+                {t({ ko: "添加", en: "Add", ja: "追加", zh: "添加" })}
               </button>
             </div>
           </form>
@@ -781,7 +787,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
           >
             <h3 className="text-lg font-bold mb-5 text-slate-100 flex items-center gap-2">
               <span>✏️</span>
-              {t({ ko: "노드 편집", en: "Edit Node", ja: "ノード編集", zh: "编辑节点" })}
+              {t({ ko: "编辑节点", en: "Edit Node", ja: "ノード編集", zh: "编辑节点" })}
             </h3>
 
             <div className="space-y-4">
@@ -807,13 +813,13 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                   value={editForm.name_ko}
                   onChange={(e) => setEditForm({ ...editForm, name_ko: e.target.value })}
                   className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-colors"
-                  placeholder={t({ ko: "韩语/日语/中文", en: "Korean/Japanese/Chinese", ja: "韓国語/日本語/中国語", zh: "韩语/日语/中文" })}
+                  placeholder={t({ ko: "本地名称", en: "Korean/Japanese/Chinese", ja: "韓国語/日本語/中国語", zh: "韩语/日语/中文" })}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1.5 text-slate-300">
-                  {t({ ko: "직급 (Tier)", en: "Role (Tier)", ja: "役職", zh: "角色 (Tier)" })}
+                  {t({ ko: "角色 (Tier)", en: "Role (Tier)", ja: "役職", zh: "角色 (Tier)" })}
                 </label>
                 <select
                   value={editForm.tier}
@@ -829,14 +835,14 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
 
               <div>
                 <label className="block text-sm font-medium mb-1.5 text-slate-300">
-                  {t({ ko: "책임자", en: "Person in Charge", ja: "責任者", zh: "负责人" })}
+                  {t({ ko: "负责人", en: "Person in Charge", ja: "責任者", zh: "负责人" })}
                 </label>
                 <select
                   value={editForm.agent_id}
                   onChange={(e) => setEditForm({ ...editForm, agent_id: e.target.value })}
                   className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-colors"
                 >
-                  <option value="">-- {t({ ko: "없음", en: "None", ja: "なし", zh: "无" })} --</option>
+                  <option value="">-- {t({ ko: "无", en: "None", ja: "なし", zh: "无" })} --</option>
                   {allAgents
                     .filter((agent) => {
                       // Filter out agents already assigned to other nodes
@@ -864,14 +870,14 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
               {editForm.tier === 2 && (
                 <div>
                   <label className="block text-sm font-medium mb-1.5 text-slate-300">
-                    {t({ ko: "组长 설정", en: "Set Leader", ja: "リーダー設定", zh: "设置组长" })}
+                    {t({ ko: "设置组长", en: "Set Leader", ja: "リーダー設定", zh: "设置组长" })}
                   </label>
                   <select
                     value={editForm.leader_agent_id}
                     onChange={(e) => setEditForm({ ...editForm, leader_agent_id: e.target.value })}
                     className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-colors"
                   >
-                    <option value="">-- {t({ ko: "없음", en: "None", ja: "なし", zh: "无" })} --</option>
+                    <option value="">-- {t({ ko: "无", en: "None", ja: "なし", zh: "无" })} --</option>
                     {nodeAgents.map((agent) => (
                       <option key={agent.id} value={agent.id}>
                         {agent.avatar_emoji || "🤖"} {agent.name}
@@ -879,7 +885,7 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                     ))}
                   </select>
                   <p className="text-xs text-slate-500 mt-1">
-                    {t({ ko: "이 노드에 속한 에이전트 중 선택", en: "Select from agents assigned to this node", ja: "このノードに属するエージェントから選択", zh: "从属于此节点的员工中选择" })}
+                    {t({ ko: "从属于此节点的员工中选择", en: "Select from agents assigned to this node", ja: "このノードに属するエージェントから選択", zh: "从属于此节点的员工中选择" })}
                   </p>
                 </div>
               )}
@@ -894,14 +900,14 @@ export default function OrgTreeManager({ onBack, departments = [], officePackOpt
                 }}
                 className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
               >
-                {t({ ko: "취소", en: "Cancel", ja: "キャンセル", zh: "取消" })}
+                {t({ ko: "取消", en: "Cancel", ja: "キャンセル", zh: "取消" })}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors font-medium"
               >
-                {saving ? t({ ko: "저장 중...", en: "Saving...", ja: "保存中...", zh: "保存中..." }) : t({ ko: "저장", en: "Save", ja: "保存", zh: "保存" })}
+                {saving ? t({ ko: "保存中...", en: "Saving...", ja: "保存中...", zh: "保存中..." }) : t({ ko: "保存", en: "Save", ja: "保存", zh: "保存" })}
               </button>
             </div>
           </form>

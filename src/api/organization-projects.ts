@@ -4,6 +4,7 @@ import type {
   Agent,
   Department,
   MeetingPresence,
+  Office,
   Project,
   SubTask,
   Task,
@@ -12,6 +13,43 @@ import type {
   TaskType,
   WorkflowPackKey,
 } from "../types";
+
+// Offices
+export async function getOffices(): Promise<Office[]> {
+  const j = await request<{ offices: Office[] }>("/api/offices");
+  return j.offices;
+}
+
+export async function createOffice(data: {
+  name: string;
+  name_ko?: string;
+  name_ja?: string;
+  name_zh?: string;
+  icon?: string;
+  description?: string;
+}): Promise<Office> {
+  const j = await request<{ office: Office }>("/api/offices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return j.office;
+}
+
+export async function updateOffice(
+  id: string,
+  data: Partial<Pick<Office, "name" | "name_ko" | "name_ja" | "name_zh" | "icon" | "description" | "sort_order">>,
+): Promise<void> {
+  await patch(`/api/offices/${id}`, data);
+}
+
+export async function deleteOffice(id: string): Promise<void> {
+  await del(`/api/offices/${id}`);
+}
+
+export async function reorderOffices(orders: { id: string; sort_order: number }[]): Promise<void> {
+  await patch("/api/offices/reorder", { orders });
+}
 
 // Departments
 export async function getDepartments(options?: {
@@ -43,6 +81,7 @@ export async function createDepartment(data: {
   name_ko?: string;
   name_ja?: string;
   name_zh?: string;
+  office_id?: string | null;
   icon?: string;
   color?: string;
   description?: string;
@@ -62,7 +101,16 @@ export async function updateDepartment(
   data: Partial<
     Pick<
       Department,
-      "name" | "name_ko" | "name_ja" | "name_zh" | "icon" | "color" | "description" | "prompt" | "sort_order"
+      | "name"
+      | "name_ko"
+      | "name_ja"
+      | "name_zh"
+      | "office_id"
+      | "icon"
+      | "color"
+      | "description"
+      | "prompt"
+      | "sort_order"
     >
   > & { workflow_pack_key?: WorkflowPackKey },
 ): Promise<void> {
@@ -134,6 +182,8 @@ export async function updateAgent(
       | "avatar_emoji"
       | "sprite_number"
       | "personality"
+      | "agent_config"
+      | "memory_config"
     >
   > & {
     workflow_pack_key?: WorkflowPackKey;
@@ -154,6 +204,8 @@ export async function createAgent(data: {
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;
+  agent_config?: string | null;
+  memory_config?: string | null;
   workflow_pack_key?: WorkflowPackKey;
 }): Promise<Agent> {
   const j = (await post("/api/agents", data)) as { ok: boolean; agent: Agent };

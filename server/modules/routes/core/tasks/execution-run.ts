@@ -46,6 +46,7 @@ export type TaskRunRouteDeps = Pick<
   | "spawnCliAgent"
   | "handleTaskRunComplete"
   | "buildAvailableSkillsPromptBlock"
+  | "buildSecretaryMemoryPromptBlock"
 >;
 
 export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
@@ -82,6 +83,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
     spawnCliAgent,
     handleTaskRunComplete,
     buildAvailableSkillsPromptBlock,
+    buildSecretaryMemoryPromptBlock,
   } = deps;
 
   app.post("/api/tasks/:id/run", (req, res) => {
@@ -455,8 +457,12 @@ Whenever you complete a subtask, report it in this format:
       videoArtifactRelativePath: videoArtifactSpec?.relativePath,
     });
 
+    const secretaryMemoryPromptBlock = buildSecretaryMemoryPromptBlock
+      ? buildSecretaryMemoryPromptBlock(agent.id)
+      : "";
     const prompt = buildTaskExecutionPrompt(
       [
+        secretaryMemoryPromptBlock,
         (
           buildAvailableSkillsPromptBlock ||
           ((providerName: string) => `[Available Skills][provider=${providerName || "unknown"}][unavailable]`)

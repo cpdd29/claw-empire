@@ -71,7 +71,7 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
       .join("\n");
   }
 
-  const { buildAvailableSkillsPromptBlock } = createPromptSkillsHelper(db as any);
+  const { buildAvailableSkillsPromptBlock, buildSecretaryMemoryPromptBlock } = createPromptSkillsHelper(db as any);
 
   const CONTEXT_IGNORE_DIRS = new Set([
     "node_modules",
@@ -482,6 +482,7 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
     hasExplicitWarningFixRequest,
     buildTaskExecutionPrompt,
     buildAvailableSkillsPromptBlock,
+    buildSecretaryMemoryPromptBlock,
     generateProjectContext,
     getRecentChanges,
     ensureClaudeMd,

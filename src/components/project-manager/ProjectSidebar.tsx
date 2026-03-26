@@ -58,7 +58,7 @@ export default function ProjectSidebar({
             }
           }}
           placeholder={t({
-            ko: "프로젝트 검색",
+            ko: "搜索项目",
             en: "Search projects",
             ja: "プロジェクト検索",
             zh: "搜索项目",
@@ -73,21 +73,21 @@ export default function ProjectSidebar({
             }}
             className="rounded-md bg-slate-700 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-600"
           >
-            {t({ ko: "조회", en: "Search", ja: "検索", zh: "查询" })}
+            {t({ ko: "查询", en: "Search", ja: "検索", zh: "查询" })}
           </button>
           <button
             type="button"
             onClick={startCreate}
             className="rounded-md bg-blue-700 px-2.5 py-1 text-xs text-white hover:bg-blue-600"
           >
-            {t({ ko: "신규", en: "New", ja: "新規", zh: "新建" })}
+            {t({ ko: "新建", en: "New", ja: "新規", zh: "新建" })}
           </button>
           <button
             type="button"
             onClick={onOpenGitHubImport}
             className="rounded-md bg-slate-700 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-600"
           >
-            {t({ ko: "GitHub 가져오기", en: "GitHub Import", ja: "GitHub インポート", zh: "GitHub 导入" })}
+            {t({ ko: "GitHub 导入", en: "GitHub Import", ja: "GitHub インポート", zh: "GitHub 导入" })}
           </button>
         </div>
       </div>
@@ -95,11 +95,11 @@ export default function ProjectSidebar({
       <div className="flex-1 overflow-y-auto">
         {loadingList ? (
           <div className="px-4 py-6 text-xs text-slate-400">
-            {t({ ko: "불러오는 중...", en: "Loading...", ja: "読み込み中...", zh: "加载中..." })}
+            {t({ ko: "加载中...", en: "Loading...", ja: "読み込み中...", zh: "加载中..." })}
           </div>
         ) : projects.length === 0 ? (
           <div className="px-4 py-6 text-xs text-slate-500">
-            {t({ ko: "등록된 프로젝트가 없습니다", en: "No projects", ja: "プロジェクトなし", zh: "暂无项目" })}
+            {t({ ko: "暂无项目", en: "No projects", ja: "プロジェクトなし", zh: "暂无项目" })}
           </div>
         ) : (
           <div className="divide-y divide-slate-800">
@@ -139,7 +139,7 @@ export default function ProjectSidebar({
           onClick={() => void loadProjects(page - 1, search)}
           className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 disabled:opacity-40"
         >
-          {t({ ko: "이전", en: "Prev", ja: "前へ", zh: "上一页" })}
+          {t({ ko: "上一页", en: "Prev", ja: "前へ", zh: "上一页" })}
         </button>
         <span className="text-xs text-slate-500">
           {page} / {totalPages}
@@ -150,7 +150,7 @@ export default function ProjectSidebar({
           onClick={() => void loadProjects(page + 1, search)}
           className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 disabled:opacity-40"
         >
-          {t({ ko: "다음", en: "Next", ja: "次へ", zh: "下一页" })}
+          {t({ ko: "下一页", en: "Next", ja: "次へ", zh: "下一页" })}
         </button>
       </div>
     </aside>

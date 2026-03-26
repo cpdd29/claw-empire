@@ -39,6 +39,7 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
       id TEXT PRIMARY KEY,
       name TEXT,
       name_ko TEXT,
+      office_id TEXT,
       color TEXT
     );
 
@@ -65,6 +66,56 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
       stats_tasks_done INTEGER NOT NULL DEFAULT 0,
       stats_xp INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE org_nodes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      name_ko TEXT NOT NULL DEFAULT '',
+      name_ja TEXT NOT NULL DEFAULT '',
+      name_zh TEXT NOT NULL DEFAULT '',
+      tier INTEGER NOT NULL DEFAULT 1,
+      parent_id TEXT,
+      department_id TEXT,
+      agent_id TEXT,
+      metadata_json TEXT,
+      sort_order INTEGER DEFAULT 99,
+      created_at INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE office_secretary_bindings (
+      office_id TEXT PRIMARY KEY,
+      secretary_agent_id TEXT NOT NULL,
+      org_node_id TEXT,
+      created_at INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT 0,
+      UNIQUE(secretary_agent_id)
+    );
+
+    CREATE TABLE secretary_department_bindings (
+      secretary_agent_id TEXT NOT NULL,
+      department_id TEXT NOT NULL,
+      office_id TEXT,
+      created_at INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT 0,
+      PRIMARY KEY (secretary_agent_id, department_id)
+    );
+
+    CREATE TABLE department_leader_bindings (
+      department_id TEXT PRIMARY KEY,
+      leader_agent_id TEXT NOT NULL,
+      created_at INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT 0,
+      UNIQUE(leader_agent_id)
+    );
+
+    CREATE TABLE department_member_bindings (
+      department_id TEXT NOT NULL,
+      member_agent_id TEXT NOT NULL,
+      created_at INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT 0,
+      PRIMARY KEY (department_id, member_agent_id)
     );
   `);
 
@@ -150,6 +201,80 @@ describe("agent CRUD seed filter", () => {
       expect(res.statusCode).toBe(200);
       const payload = res.payload as { agents: Array<{ id: string }> };
       expect(payload.agents.map((agent) => agent.id)).toEqual(["dev-leader", "video_preprod-seed-2"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("GET /api/agents 只返回每个员工一条记录，即使绑定了多个 org node", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dept-1', 'Dept', '部门', '#3b82f6')").run();
+      db.prepare(
+        "INSERT INTO agents (id, name, department_id, role, status, created_at) VALUES (?, ?, 'dept-1', 'senior', 'idle', 1)",
+      ).run("agent-1", "Secretary");
+      db.prepare(
+        "INSERT INTO org_nodes (id, name, tier, department_id, agent_id, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run("node-agent", "Agent Node", 3, "dept-1", "agent-1", null, 1, 1);
+      db.prepare(
+        "INSERT INTO org_nodes (id, name, tier, department_id, agent_id, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run("node-secretary", "Secretary Node", 1, null, "agent-1", JSON.stringify({ office_id: "office-1" }), 2, 2);
+
+      const handler = routes.get("GET /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.({ query: {} }, res);
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { agents: Array<{ id: string; org_node_id?: string; tier?: number }> };
+      expect(payload.agents).toHaveLength(1);
+      expect(payload.agents[0]).toMatchObject({
+        id: "agent-1",
+        org_node_id: "node-secretary",
+        tier: 1,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("PATCH /api/agents/:id 在历史重复 org node 存在时仍可正常保存秘书角色", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dept-1', 'Dept', '部门', '#3b82f6')").run();
+      db.prepare(
+        "INSERT INTO agents (id, name, department_id, role, status, created_at) VALUES (?, ?, 'dept-1', 'junior', 'idle', 1)",
+      ).run("agent-1", "Secretary");
+      db.prepare(
+        "INSERT INTO org_nodes (id, name, tier, department_id, agent_id, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run("node-agent", "Agent Node", 3, "dept-1", "agent-1", null, 1, 1);
+      db.prepare(
+        "INSERT INTO org_nodes (id, name, tier, department_id, agent_id, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run("node-secretary", "Secretary Node", 1, null, "agent-1", JSON.stringify({ office_id: "office-1" }), 2, 2);
+
+      const handler = routes.get("PATCH /api/agents/:id");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          params: { id: "agent-1" },
+          body: {
+            role: "senior",
+            tier: 1,
+            department_id: null,
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const bindings = db.prepare("SELECT office_id, secretary_agent_id FROM office_secretary_bindings").all() as Array<{
+        office_id: string;
+        secretary_agent_id: string;
+      }>;
+      expect(bindings).toEqual([{ office_id: "office-1", secretary_agent_id: "agent-1" }]);
     } finally {
       db.close();
     }

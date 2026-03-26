@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { hasMeaningfulMemoryContent, readMemoryFile } from "../../memory-store.ts";
 
 type PromptSkillProvider = "claude" | "codex" | "gemini" | "opencode" | "kimi" | "copilot" | "antigravity" | "api";
 type PromptSkillRow = {
@@ -131,6 +132,7 @@ function buildSkillRuntimePolicyLines(providerScoped: boolean): string[] {
 
 export function createPromptSkillsHelper(db: DatabaseSync): {
   buildAvailableSkillsPromptBlock: (provider: string) => string;
+  buildSecretaryMemoryPromptBlock: (agentId: string | null | undefined) => string;
 } {
   function buildAvailableSkillsPromptBlock(provider: string): string {
     const providerDisplay = getPromptSkillProviderDisplayName(provider);
@@ -170,5 +172,25 @@ export function createPromptSkillsHelper(db: DatabaseSync): {
     }
   }
 
-  return { buildAvailableSkillsPromptBlock };
+  function buildSecretaryMemoryPromptBlock(agentId: string | null | undefined): string {
+    if (!agentId) return "";
+    try {
+      const row = db
+        .prepare("SELECT id FROM org_nodes WHERE agent_id = ? AND tier = 1 LIMIT 1")
+        .get(agentId) as { id: string } | undefined;
+      if (!row) return "";
+      const memory = readMemoryFile(agentId).trim();
+      if (!hasMeaningfulMemoryContent(memory)) return "";
+      const clipped = memory.length > 6_000 ? `${memory.slice(0, 6_000).trimEnd()}\n...[memory truncated]` : memory;
+      return [
+        "[Secretary Memory]",
+        "Use this as long-term memory from historical interactions. Prefer it for stable user facts, past decisions, and preferences, but update it when newer task context overrides older memory.",
+        clipped,
+      ].join("\n");
+    } catch {
+      return "";
+    }
+  }
+
+  return { buildAvailableSkillsPromptBlock, buildSecretaryMemoryPromptBlock };
 }

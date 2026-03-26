@@ -1,5 +1,4 @@
-import type { Agent, Department } from "../../types";
-import { localeName } from "../../i18n";
+import type { Agent, Department, Office } from "../../types";
 import AgentCard from "./AgentCard";
 import { StackedSpriteIcon } from "./EmojiPicker";
 import type { Translator } from "./types";
@@ -8,21 +7,16 @@ import type { OrgNode } from "../../types/org-nodes";
 interface AgentsTabProps {
   tr: Translator;
   locale: string;
-  isKo: boolean;
   agents: Agent[];
+  offices: Office[];
   departments: Department[];
   orgNodes: OrgNode[];
-  deptTab: string;
-  setDeptTab: (deptId: string) => void;
-  search: string;
-  setSearch: (next: string) => void;
   sortedAgents: Agent[];
   spriteMap: Map<string, number>;
   confirmDeleteId: string | null;
   setConfirmDeleteId: (id: string | null) => void;
   onEditAgent: (agent: Agent) => void;
-  onEditDepartment: (department: Department) => void;
-  onDeleteAgent: (agentId: string) => void;
+  onDeleteAgent: (agent: Agent) => void;
   onDuplicateAgent: (agent: Agent) => void;
   onIdentityClick: (agent: Agent) => void;
   saving: boolean;
@@ -34,20 +28,15 @@ interface AgentsTabProps {
 export default function AgentsTab({
   tr,
   locale,
-  isKo,
   agents,
+  offices,
   departments,
   orgNodes,
-  deptTab,
-  setDeptTab,
-  search,
-  setSearch,
   sortedAgents,
   spriteMap,
   confirmDeleteId,
   setConfirmDeleteId,
   onEditAgent,
-  onEditDepartment,
   onDeleteAgent,
   onDuplicateAgent,
   onIdentityClick,
@@ -55,94 +44,76 @@ export default function AgentsTab({
   randomIconSprites,
 }: AgentsTabProps) {
   const workingCount = agents.filter((agent) => agent.status === "working").length;
-  const deptCounts = new Map<string, { total: number; working: number }>();
-  for (const agent of agents) {
-    const key = agent.department_id || "__none";
-    const count = deptCounts.get(key) ?? { total: 0, working: 0 };
-    count.total += 1;
-    if (agent.status === "working") count.working += 1;
-    deptCounts.set(key, count);
-  }
+  const assignedDepartmentCount = agents.filter((agent) => agent.department_id).length;
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          {
-            label: tr("전체 인원", "Total"),
-            value: agents.length,
-            icon: <StackedSpriteIcon sprites={randomIconSprites.total} />,
-          },
-          { label: tr("근무 중", "Working"), value: workingCount, icon: "💼" },
-          { label: tr("부서", "Departments"), value: departments.length, icon: "🏢" },
-        ].map((summary) => (
-          <div
-            key={summary.label}
-            className="rounded-xl px-4 py-3"
-            style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}
-          >
-            <div className="text-xs mb-1" style={{ color: "var(--th-text-muted)" }}>
-              {summary.icon} {summary.label}
+      <div className="mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div
+          className="rounded-2xl p-4"
+          style={{
+            background:
+              "radial-gradient(circle at top left, rgba(59,130,246,0.16), transparent 48%), linear-gradient(135deg, rgba(255,255,255,0.14), rgba(15,23,42,0.03)), var(--th-card-bg)",
+            border: "1px solid var(--th-card-border)",
+            boxShadow: "0 18px 40px -28px rgba(59,130,246,0.35)",
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div
+                className="text-[11px] font-semibold uppercase tracking-[0.24em]"
+                style={{ color: "var(--th-text-muted)" }}
+              >
+                {tr("员工总数", "Total Employees")}
+              </div>
+              <div className="mt-3 text-4xl font-semibold tabular-nums" style={{ color: "var(--th-text-heading)" }}>
+                {agents.length}
+              </div>
+              <div className="mt-2 text-sm" style={{ color: "var(--th-text-muted)" }}>
+                {tr("已绑定部门", "Assigned Departments")} {assignedDepartmentCount}
+              </div>
             </div>
-            <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--th-text-heading)" }}>
-              {summary.value}
+            <div
+              className="rounded-2xl px-3 py-2"
+              style={{
+                background: "var(--th-bg-surface)",
+                border: "1px solid var(--th-card-border)",
+                color: "var(--th-text-heading)",
+              }}
+            >
+              <StackedSpriteIcon sprites={randomIconSprites.total} />
             </div>
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="flex items-center gap-2 flex-wrap" style={{ borderBottom: "1px solid var(--th-card-border)" }}>
-        <button
-          onClick={() => setDeptTab("all")}
-          className={`flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors ${
-            deptTab === "all" ? "text-blue-400 border-b-2 border-blue-400" : "hover:text-slate-200"
-          }`}
-          style={deptTab !== "all" ? { color: "var(--th-text-muted)" } : undefined}
+        <div
+          className="rounded-2xl p-4"
+          style={{
+            background:
+              "radial-gradient(circle at top left, rgba(16,185,129,0.16), transparent 46%), linear-gradient(135deg, rgba(255,255,255,0.12), rgba(15,23,42,0.025)), var(--th-card-bg)",
+            border: "1px solid var(--th-card-border)",
+            boxShadow: "0 18px 40px -28px rgba(16,185,129,0.28)",
+          }}
         >
-          {tr("전체", "All")} <span className="opacity-60">{agents.length}</span>
-        </button>
-        {departments.map((department) => {
-          const count = deptCounts.get(department.id);
-          return (
-            <button
-              key={department.id}
-              onClick={() => setDeptTab(department.id)}
-              onDoubleClick={(e) => {
-                e.preventDefault();
-                onEditDepartment(department);
-              }}
-              title={tr("더블클릭: 부서 편집", "Double-click: edit dept")}
-              className={`flex items-center gap-1 px-3 py-2 text-xs font-medium transition-colors ${
-                deptTab === department.id ? "text-blue-400 border-b-2 border-blue-400" : "hover:text-slate-200"
-              }`}
-              style={deptTab !== department.id ? { color: "var(--th-text-muted)" } : undefined}
-            >
-              <span>{department.icon}</span>
-              <span className="hidden sm:inline">{localeName(locale, department)}</span>
-              <span className="opacity-60">{count?.total ?? 0}</span>
-            </button>
-          );
-        })}
-        <div className="ml-auto pb-1">
-          <input
-            type="text"
-            placeholder={`${tr("검색", "Search")}...`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/40 transition-shadow w-36"
-            style={{
-              background: "var(--th-input-bg)",
-              border: "1px solid var(--th-input-border)",
-              color: "var(--th-text-primary)",
-            }}
-          />
+          <div
+            className="text-[11px] font-semibold uppercase tracking-[0.24em]"
+            style={{ color: "var(--th-text-muted)" }}
+          >
+            {tr("工作中", "Working")}
+          </div>
+          <div className="mt-3 text-4xl font-semibold tabular-nums" style={{ color: "var(--th-text-heading)" }}>
+            {workingCount}
+          </div>
+          <div className="mt-2 text-sm" style={{ color: "var(--th-text-muted)" }}>
+            {tr("当前可见员工卡片可继续按搜索与部门状态筛选。", "Use search and department status filters to narrow the list.")}
+          </div>
         </div>
       </div>
 
       {sortedAgents.length === 0 ? (
         <div className="text-center py-16" style={{ color: "var(--th-text-muted)" }}>
           <div className="text-3xl mb-2">🔍</div>
-          {tr("검색 결과 없음", "No agents found")}
+          {tr("未找到员工", "No employees found")}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -151,9 +122,9 @@ export default function AgentsTab({
               key={agent.id}
               agent={agent}
               spriteMap={spriteMap}
-              isKo={isKo}
               locale={locale}
               tr={tr}
+              offices={offices}
               departments={departments}
               orgNodes={orgNodes}
               onEdit={() => onEditAgent(agent)}
@@ -161,7 +132,7 @@ export default function AgentsTab({
               onIdentityClick={() => onIdentityClick(agent)}
               confirmDeleteId={confirmDeleteId}
               onDeleteClick={() => setConfirmDeleteId(agent.id)}
-              onDeleteConfirm={() => onDeleteAgent(agent.id)}
+              onDeleteConfirm={() => onDeleteAgent(agent)}
               onDeleteCancel={() => setConfirmDeleteId(null)}
               saving={saving}
             />

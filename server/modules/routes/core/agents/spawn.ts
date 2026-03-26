@@ -33,6 +33,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
   const buildAvailableSkillsPromptBlock =
     ctx.buildAvailableSkillsPromptBlock ||
     ((provider: string) => `[Available Skills][provider=${provider || "unknown"}][unavailable]`);
+  const buildSecretaryMemoryPromptBlock = ctx.buildSecretaryMemoryPromptBlock || (() => "");
 
   app.post("/api/agents/:id/spawn", (req, res) => {
     const id = String(req.params.id);
@@ -178,6 +179,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
     const logPath = path.join(logsDir, `${taskId}.log`);
     const executionSession = ensureTaskExecutionSession(taskId, agent.id, provider);
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
+    const secretaryMemoryPromptBlock = buildSecretaryMemoryPromptBlock(agent.id);
     const roleLabel =
       { team_leader: "Team Leader", senior: "Senior", junior: "Junior", intern: "Intern" }[agent.role] || agent.role;
     const deptConstraint = agent.department_id
@@ -200,6 +202,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
 
     const prompt = buildTaskExecutionPrompt(
       [
+        secretaryMemoryPromptBlock,
         availableSkillsPromptBlock,
         `[Task Session] id=${executionSession.sessionId} owner=${executionSession.agentId} provider=${executionSession.provider}`,
         "This session is scoped to this task only.",

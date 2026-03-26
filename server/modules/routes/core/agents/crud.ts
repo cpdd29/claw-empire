@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SQLInputValue } from "node:sqlite";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { MeetingReviewDecision } from "../../shared/types.ts";
+import { syncOrganizationRelationMappings } from "../../../organization/relationship-mappings.ts";
 import {
   DEFAULT_WORKFLOW_PACK_KEY,
   isWorkflowPackKey,
@@ -32,6 +33,19 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     }
   })();
   const agentPackExpr = hasAgentWorkflowPackColumn ? "COALESCE(a.workflow_pack_key, 'development')" : "'development'";
+  const agentNodeJoin = `
+      LEFT JOIN org_nodes n
+        ON n.id = (
+          SELECT candidate.id
+          FROM org_nodes candidate
+          WHERE candidate.agent_id = a.id
+          ORDER BY
+            CASE WHEN candidate.tier = 1 THEN 0 ELSE 1 END,
+            COALESCE(candidate.updated_at, candidate.created_at, 0) DESC,
+            candidate.id DESC
+          LIMIT 1
+        )
+  `;
 
   function parseIncludeSeedParam(input: unknown): boolean {
     if (Array.isArray(input)) input = input[0];
@@ -194,7 +208,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         ON opd.workflow_pack_key = ${agentPackExpr}
        AND opd.department_id = a.department_id
       LEFT JOIN departments d ON a.department_id = d.id
-      LEFT JOIN org_nodes n ON a.id = n.agent_id
+      ${agentNodeJoin}
       ${seedFilterClause}
       ORDER BY a.department_id, a.role, a.name
     `,
@@ -208,7 +222,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         n.tier, n.id AS org_node_id
       FROM agents a
       LEFT JOIN departments d ON a.department_id = d.id
-      LEFT JOIN org_nodes n ON a.id = n.agent_id
+      ${agentNodeJoin}
       ${seedFilterClause}
       ORDER BY a.department_id, a.role, a.name
     `,
@@ -333,13 +347,15 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       const sprite_number =
         typeof body.sprite_number === "number" && body.sprite_number > 0 ? body.sprite_number : null;
       const personality = typeof body.personality === "string" ? body.personality.trim() || null : null;
+      const agent_config = typeof body.agent_config === "string" ? body.agent_config.trim() || null : null;
+      const memory_config = typeof body.memory_config === "string" ? body.memory_config.trim() || null : null;
 
       const id = randomUUID();
       try {
         if (hasAgentWorkflowPackColumn) {
           db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider, avatar_emoji, sprite_number, personality, agent_config, memory_config)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
             id,
             name,
@@ -353,11 +369,13 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             avatar_emoji,
             sprite_number,
             personality,
+            agent_config,
+            memory_config,
           );
         } else {
           db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, avatar_emoji, sprite_number, personality, agent_config, memory_config)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
             id,
             name,
@@ -370,6 +388,8 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             avatar_emoji,
             sprite_number,
             personality,
+            agent_config,
+            memory_config,
           );
         }
       } catch (err: any) {
@@ -427,6 +447,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         // org_nodes 创建失败不阻断 agent 创建
       }
 
+      syncOrganizationRelationMappings(db as any);
       broadcast("agent_created", created);
       res.status(201).json({ ok: true, agent: created });
     } catch (err) {
@@ -456,6 +477,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
           id,
         );
         db.prepare("DELETE FROM agents WHERE id = ?").run(id);
+        syncOrganizationRelationMappings(db as any);
       });
 
       broadcast("agent_deleted", { id });
@@ -602,6 +624,8 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       "avatar_emoji",
       "sprite_number",
       "personality",
+      "agent_config",
+      "memory_config",
       "status",
       "current_task_id",
       "acts_as_planning_leader",
@@ -776,6 +800,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       }
     }
 
+    syncOrganizationRelationMappings(db as any);
     res.json({ ok: true, agent: updated });
   });
 }

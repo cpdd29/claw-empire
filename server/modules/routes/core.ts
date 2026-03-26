@@ -30,6 +30,7 @@ import {
 } from "../../oauth/helpers.ts";
 import { registerAgentRoutes } from "./core/agents/index.ts";
 import { registerDepartmentRoutes } from "./core/departments.ts";
+import { registerOfficeRoutes } from "./core/offices.ts";
 import { registerGitHubRoutes } from "./core/github-routes.ts";
 import { registerOrgNodeRoutes } from "./core/org-nodes.ts";
 import { registerMemoryRoutes } from "./core/memories.ts";
@@ -61,6 +62,9 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   const buildAvailableSkillsPromptBlock =
     __ctx.buildAvailableSkillsPromptBlock ||
     ((provider: string) => `[Available Skills][provider=${provider || "unknown"}][unavailable]`);
+  const buildSecretaryMemoryPromptBlock =
+    __ctx.buildSecretaryMemoryPromptBlock ||
+    ((_agentId: string | null | undefined) => "");
   const cachedCliStatus = __ctx.cachedCliStatus;
   const cachedModels = __ctx.cachedModels;
   const chooseSafeReply = __ctx.chooseSafeReply;
@@ -342,6 +346,16 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
     runInTransaction,
   });
 
+  // Offices
+  // ---------------------------------------------------------------------------
+  registerOfficeRoutes({
+    app,
+    db,
+    broadcast,
+    normalizeTextField,
+    runInTransaction,
+  });
+
 // ---------------------------------------------------------------------------
   // Org Nodes (Hierarchical CEO Structure)
   // ---------------------------------------------------------------------------
@@ -446,6 +460,7 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
     spawnCliAgent,
     handleTaskRunComplete,
     buildAvailableSkillsPromptBlock,
+    buildSecretaryMemoryPromptBlock,
     stopProgressTimer,
     rollbackTaskWorktree,
     clearTaskWorkflowState,

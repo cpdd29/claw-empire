@@ -190,6 +190,7 @@ export interface WorkflowCoreExports {
   hasExplicitWarningFixRequest: (...args: any[]) => any;
   buildTaskExecutionPrompt: (...args: any[]) => any;
   buildAvailableSkillsPromptBlock: (...args: any[]) => any;
+  buildSecretaryMemoryPromptBlock: (...args: any[]) => any;
   generateProjectContext: (...args: any[]) => any;
   getRecentChanges: (...args: any[]) => any;
   ensureClaudeMd: (...args: any[]) => any;

@@ -5,14 +5,14 @@ import type { Agent } from "../types";
 /** Map agent IDs to sprite numbers (stable order, same as OfficeView) */
 export function buildSpriteMap(agents: Agent[]): Map<string, number> {
   const map = new Map<string, number>();
-  // 1) sprite_number가 DB에 지정된 에이전트 우선
+  // 1) 优先使用数据库中指定了 sprite_number 的成员
   for (const a of agents) {
     if (a.sprite_number != null && a.sprite_number > 0) map.set(a.id, a.sprite_number);
   }
-  // 2) DORO fallback (sprite_number 미지정시)
+  // 2) DORO 回退逻辑（未指定 sprite_number 时）
   const doro = agents.find((a) => a.name === "DORO");
   if (doro && !map.has(doro.id)) map.set(doro.id, 13);
-  // 3) 나머지: 자동 할당 (1-12 순환)
+  // 3) 其余成员自动分配（1-12 循环）
   const rest = [...agents].filter((a) => !map.has(a.id)).sort((a, b) => a.id.localeCompare(b.id));
   rest.forEach((a, i) => map.set(a.id, (i % 12) + 1));
   return map;

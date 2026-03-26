@@ -20,7 +20,7 @@ export function resolveReportAgent(agents: Agent[], seed: ReportAgentSeed): Agen
   return {
     id: agentId || `report-agent:${agentName || agentNameKo}`,
     name: agentName || agentNameKo || "Agent",
-    name_ko: agentNameKo || agentName || "에이전트",
+    name_ko: agentNameKo || agentName || "Agent",
     avatar_emoji: "",
     status: "idle",
     current_task_id: null,
